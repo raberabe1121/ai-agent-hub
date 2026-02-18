@@ -1,159 +1,81 @@
-# AI Agent Hub - MTA-based Message Hub
+# AI Agent Hub: An MTA-based OS Layer for Decentralized AI Agents
 
-## 概要
-**AI Agent Hub** は、メール（SMTP/LMTP）を高速・信頼性の高いメッセージバスとして利用し、AIエージェントの行動・タスク・イベントを **メッセージ指向で処理するための OS レイヤー** です。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue.svg)](#2-core-architecture)
 
-従来の Webhook / REST ではなく、**Postfix + LMTP + Queue + Worker** という MTA アーキテクチャを基盤にすることで、以下を実現します：
-
-- 100% メッセージ駆動の AI アクションルーティング
-- メール＝AI間通信の標準フォーマット（Envelope）
-- 完全非同期・高耐久（MTA の再送・キュー管理）
-- エージェント同士の連携と状態管理
-- ローカル/クラウドどちらでも動作する分散OSとしての性質
-
-本プロジェクトの目的は **“AIの行動をつなぐミドルウェア層”** を構築すること。
-AIエージェントが分散して存在する時代の基盤となる、新しい OS の形を目指します。
+AI Agent Hubは、30年以上の実績を持つメール転送エージェント（MTA）のアーキテクチャを、「高信頼な非同期メッセージバス」として再定義したプロジェクトです。
+分散型AIエージェント間の通信・タスク管理・状態遷移を制御するための **メッセージ指向 OS レイヤー** を提供します。
 
 ---
 
-## アーキテクチャ概要
-```
-┌──────────┐     SMTP       ┌─────────────┐
-│  Agent Sender │ ───────────▶ │   Postfix MTA │
-└──────────┘                 └──────┬────────┘
-                                      │ LMTP
-                                      ▼
-                            ┌──────────────────┐
-                            │ LMTP Handler      │
-                            │ (activitypub-lmtp)│
-                            └─────────┬────────┘
-                                      │ writes
-                                      ▼
-                              ┌──────────────┐
-                              │ Message Queue │
-                              └───────┬──────┘
-                                      │ picks
-                                      ▼
-                             ┌──────────────────┐
-                             │ Agent Worker      │
-                             │  - payload exec   │
-                             │  - AI action run  │
-                             │  - reply envelope │
-                             └─────────┬────────┘
-                                       │ SMTP
-                                       ▼
-                              ┌──────────────────┐
-                              │ Agent Reply Flow  │
-                              └──────────────────┘
-```
----
+## 1. Motivation: Why MTA?
 
-## 主な機能
-### 1. **Envelope メッセージモデル**
-AI Agent Hub のすべての操作は Envelope（封筒）として表現されます。
+現代の AI Agent オーケストレーション（Webhook, REST API, gRPC等）には、実用化において以下のクリティカルな課題が存在します。
 
-- sender
-- recipient
-- envelope_type
-- payload
-- context
-- inReplyTo
-- created_at
-- version
+* 信頼性の欠如: 通信エラー時の再送処理、指数バックオフ、キューイングの実装がアプリケーション側に委ねられており、データの消失リスクが常に伴う。
+* 状態管理の複雑化: 非同期タスクの実行ログやトレースが分散し、事後的な監査やデバッグが困難。
+* スケーラビリティの限界: スパイク的なタスク増加に対し、バッファリング層が不十分。
 
-これにより、**AIの行動ログ・状態・結果**をすべてメッセージとして残すことができます。
+AI Agent Hub は、Postfix/LMTP のエコシステムを「OSのプロセス間通信（IPC）」に転用することで、これらの課題をプロトコルレベルで解決します。
 
-### 2. **MTAベースのメッセージ配信**
-- Postfix が SMTP submission を受け取る
-- LMTP handler が JSON envelope を取り出す
-- Queue に保存し、Worker が非同期で実行
-- 返信（pong など）も同じく MTA 経由で返送
-
-MTA の再送・バッファ機構のおかげで、非常に堅牢な分散処理が可能になります。
-
-### 3. **Agent Worker による AI 実行**
-- OpenAI / Local LLM / Function calling 等を自由に差し替え
-- Envelope の payload に基づき任意のアクションを実行
-- 実行結果は **reply envelope** として再び流す
+### The Advantages
+* 100% Guaranteed Delivery: MTAの再送・キュー管理機構により、エージェントがオフラインでもメッセージを確実に保持。
+* Envelope-based Unified Format: 全てのAIアクションを「封筒（Envelope）」に封入し、不変の監査ログとして永続化。
+* Protocol as an Interface: SMTP/LMTPを抽象化レイヤーとすることで、言語やプラットフォームを問わない自律分散OSを実現。
 
 ---
 
-## サーバ構成（標準）
-- **OS**: Linux (Amazon Linux / Ubuntu)
-- **MTA**: Postfix
-- **LMTP**: Dovecot LMTP または独自 handler
-- **Queue**: SQLite / PostgreSQL / SQS
-- **Worker**: Python または Node.js
+## 2. Core Architecture
+本プロジェクトは、Postfixを「メッセージルータ」として、独自Handlerを「OSカーネル」として位置づけています。
 
-AWS無料枠だと：
-- EC2 Micro (Postfix + LMTP)
-- SQS queue / or local SQLite
-- Lambda Worker（も可）
+### Pipeline Flow
+1.  Submission: Agent Sender が Envelope（JSON）を SMTP 経由で送信。
+2.  Routing: Postfix が宛先に基づきルーティングし、LMTP 経由で Handler に配送。
+3.  Persistence:LMTP Handlerが受信した Envelope をデコードし、DB（PostgreSQL/SQS等）へアトミックに書き込み。
+4.  Execution: Agent Workerがキューをピックアップし、LLM や CLI Skills（OpenClaw-style）を実行。
+5.  Feedback Loop:実行結果を再び Envelope として作成し、MTA 経由で Reply。
 
 ---
 
-## ディレクトリ構成
-```
-ai-agent-os/
-  ├── ai_agent_hub/smtp_sender.py        # Envelope を SMTP 送信
-  ├── ai_agent_hub/lmtp_handler.py       # LMTP受信 → Queue 書き込み
-  ├── queue/                # SQLite or message queue
-  ├── worker/               # AI Worker（LLM実行）
-  ├── tests/                # E2E pipeline tests
-  ├── docs/                 # 仕様書
-  └── README.md
+## 3. Key Concepts
+
+### Envelope Model
+全ての通信は以下の構造を持つ Envelope 型で定義されます。
+これにより、AI間の「会話」はすべてスレッド化され、トレーサビリティを確保します。
+
+```json
+{
+  "id": "uuid-v4",
+  "sender": "researcher@agent.local",
+  "recipient": "executor@agent.local",
+  "envelope_type": "TASK_EXECUTION",
+  "payload": {
+    "task": "Extract business insights from recent PRs",
+    "skills": ["gh-cli", "jq"]
+  },
+  "context": {
+    "thread_id": "tx_9987",
+    "in_reply_to": "uuid-v3",
+    "priority": "high"
+  },
+  "created_at": "2026-02-18T23:00:00Z"
+}
 ```
 
----
+### High Durability & Auditability
+MTA をバックボーンに据えることで、インフラ障害時でもメッセージの整合性を保証します。
+これは、金融機関や大規模基盤で培われた「確実に届ける」技術の AI 領域への応用です。
 
-## end-to-end パイプラインテスト
-テストでは以下の流れを自動検証します：
+## 4. Roadmap & Future Visions
+- ActivityPub Integration: 分散SNSプロトコルを拡張し、AIエージェント間の「フォロー/パブリッシュ」モデルを構築。ネットワークを越えた自律協調を実現。
+- Security Layer: 通信されるペイロードに対し、VOTIRO/OPSWAT 等の API Hook を通じた無害化レイヤーをネイティブ実装。
+- Serverless Scaling: SQS + Lambda / Oracle Cloud ARM インスタンスによる、コスト効率の高い水平スケーリングのサポート。
+- CLI as a Skill: OpenClaw 思想に基づき、AI が直接 Bash コマンドを叩くための「Skills」パッケージ管理の実装。
 
-1. SMTP submission（Envelope送信）
-2. LMTP handler による受信
-3. Queue persistence（保存）
-4. Agent Worker 処理
-5. Reply Envelope（pong）の送信
-6. メッセージID/Thread の整合性チェック
-
-これにより、**AI Action → MTA経由 → AI Action reply** のループが完全に保証されます。
-
----
-
-## 利用例
-### 1. AIアクション処理（Agent → Agent）
-- タスク分解
-- Web検索
-- 計画生成
-- API呼び出し
-- Notion/CRM 更新
-
-### 2. AIログの永続化
-- 全てのAIの行動が Envelope として保存される
-- 監査ログやトレースが必ず残る
-
-### 3. ActivityPub連携（拡張モジュール）
-- LMTP handler で ActivityStreams JSON を組み立て
-- Post/Follow/Inbox 処理
-
-MTAベースSNS（分散SNS OS）への応用が可能
-
----
-
-## 将来拡張
-- Web UI inbox（メールクライアントの様に AI メッセージを閲覧）
-- エージェントマーケット（Plugin/Function の共有）
-- SQS + Lambda による水平スケール
-- AIの行動経路をグラフ化
-
----
-
-## ライセンス
-Apache 2.0（予定）
-
----
-
-## コントリビュート
-Issue/PR 歓迎します。
-AI Agent OS を一緒に作りましょう。
+## 5. About the Author
+2019年より、日本およびベトナムにて MTA (C/PHP) を用いた大規模メールセキュリティ製品の設計・実装・運用を一貫して担当。
+```
+「枯れた技術を最新のパラダイムで再定義する」
+```
+インフラレベルの視座から、AI Agent が真に「社会のインフラ」となるための高信頼なメッセージング基盤を追求している、シニアソフトウェアエンジニアです。
 
