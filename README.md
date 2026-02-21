@@ -27,7 +27,48 @@ AI Agent Hub は、Postfix/LMTP のエコシステムを「OSのプロセス間�
 
 ## 2. Core Architecture
 本プロジェクトは、Postfixを「メッセージルータ」として、独自Handlerを「OSカーネル」として位置づけています。
+```mermaid
+graph TD
+    subgraph Client_Layer [Agent Client]
+        A[Agent Sender]
+    end
 
+    subgraph Message_Bus [Reliable Message Bus / MTA]
+        B[Postfix MTA]
+        C[LMTP Handler<br/>activitypub-lmtp]
+    end
+
+    subgraph Persistence_Layer [Persistence]
+        D[(Message Queue<br/>PostgreSQL / SQS / SQLite)]
+    end
+
+    subgraph Execution_Layer [Agent Kernel]
+        E[Agent Worker]
+        F{Action Type}
+        G[LLM Execution<br/>OpenAI / Local LLM]
+        H[CLI Skills<br/>OpenClaw-style]
+    end
+
+    subgraph Feedback_Loop [Response Flow]
+        I[Agent Reply Flow]
+    end
+
+    %% Flow Connections
+    A -- "1. SMTP Submission<br/>(Envelope JSON)" --> B
+    B -- "2. Reliable Routing" --> C
+    C -- "3. Atomic Write" --> D
+    D -- "4. Pick Task" --> E
+    E --> F
+    F -- "Run LLM" --> G
+    F -- "Execute Bash" --> H
+    G & H -- "5. Reply Envelope" --> I
+    I -- "SMTP" --> B
+
+    %% Styling
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#bbf,stroke:#333,stroke-width:2px
+    style E fill:#bfb,stroke:#333,stroke-width:2px
+```
 ### Pipeline Flow
 1.  Submission: Agent Sender が Envelope（JSON）を SMTP 経由で送信。
 2.  Routing: Postfix が宛先に基づきルーティングし、LMTP 経由で Handler に配送。
