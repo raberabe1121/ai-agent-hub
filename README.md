@@ -28,46 +28,52 @@ AI Agent Hub は、Postfix/LMTP のエコシステムを「OSのプロセス間�
 ## 2. Core Architecture
 本プロジェクトは、Postfixを「メッセージルータ」として、独自Handlerを「OSカーネル」として位置づけています。
 ```mermaid
-graph TD
-    subgraph Client_Layer [Agent Client]
-        A[Agent Sender]
+flowchart TD
+    subgraph Agents["🤖 AI Agents"]
+        A1["Agent Sender<br/>researcher@agent.local"]
+        A2["Agent Worker<br/>executor@agent.local"]
     end
 
-    subgraph Message_Bus [Reliable Message Bus / MTA]
-        B[Postfix MTA]
-        C[LMTP Handler<br/>activitypub-lmtp]
+    subgraph MTA["📬 MTA Layer (Postfix)"]
+        SMTP["SMTP\n:25"]
+        PF["Postfix Router"]
+        LMTP["LMTP Handler\n:8024"]
     end
 
-    subgraph Persistence_Layer [Persistence]
-        D[(Message Queue<br/>PostgreSQL / SQS / SQLite)]
+    subgraph Kernel["⚙️ OS Kernel Layer"]
+        ENV["Envelope Parser\n(ActivityPub ID抽出)"]
+        QUEUE["Queue Directory\n./queue/*.json"]
+        WORKER["Agent Worker\n(Intent Dispatcher)"]
+        DLQ["Dead Letter Queue\n./failed/"]
     end
 
-    subgraph Execution_Layer [Agent Kernel]
-        E[Agent Worker]
-        F{Action Type}
-        G[LLM Execution<br/>OpenAI / Local LLM]
-        H[CLI Skills<br/>OpenClaw-style]
+    subgraph Intents["🧠 Intent Handlers"]
+        I1["ping"]
+        I2["echo"]
+        I3["summarize"]
+        I4["llm-query\n(coming soon)"]
     end
 
-    subgraph Feedback_Loop [Response Flow]
-        I[Agent Reply Flow]
+    subgraph Storage["💾 Persistence"]
+        FS["File System\n(current)"]
+        DB["PostgreSQL / SQS\n(roadmap)"]
     end
 
-    %% Flow Connections
-    A -- "1. SMTP Submission<br/>(Envelope JSON)" --> B
-    B -- "2. Reliable Routing" --> C
-    C -- "3. Atomic Write" --> D
-    D -- "4. Pick Task" --> E
-    E --> F
-    F -- "Run LLM" --> G
-    F -- "Execute Bash" --> H
-    G & H -- "5. Reply Envelope" --> I
-    I -- "SMTP" --> B
-
-    %% Styling
-    style B fill:#f9f,stroke:#333,stroke-width:2px
-    style D fill:#bbf,stroke:#333,stroke-width:2px
-    style E fill:#bfb,stroke:#333,stroke-width:2px
+    A1 -->|"Envelope (JSON)"| SMTP
+    SMTP --> PF
+    PF -->|"LMTP"| LMTP
+    LMTP --> ENV
+    ENV --> QUEUE
+    QUEUE -->|"poll / inotify"| WORKER
+    WORKER --> I1
+    WORKER --> I2
+    WORKER --> I3
+    WORKER --> I4
+    WORKER -->|"失敗時"| DLQ
+    WORKER -->|"Reply Envelope"| SMTP
+    SMTP -->|"返信"| A2
+    QUEUE --> FS
+    FS -.->|"移行予定"| DB
 ```
 ### Pipeline Flow
 1.  Submission: Agent Sender が Envelope（JSON）を SMTP 経由で送信。
