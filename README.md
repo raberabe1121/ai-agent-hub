@@ -26,7 +26,7 @@ AI Agent Hub は、Postfix/LMTP のエコシステムを「OSのプロセス間�
 - **Envelope-based Unified Format**: 全てのAIアクションを「封筒（Envelope）」に封入し、監査ログとして永続化。
 - **Protocol as an Interface**: SMTP/LMTPを抽象化レイヤーとすることで、言語やプラットフォームを問わない自律分散OSを実現。
 
----
+AI Agent Hubはこれを**プロトコルレベルの不変ログ**で解決します：
 
 ## 2. Core Architecture
 
