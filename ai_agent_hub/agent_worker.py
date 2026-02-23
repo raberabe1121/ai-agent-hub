@@ -12,11 +12,6 @@ from ai_agent_hub import Envelope
 from ai_agent_hub.lmtp_handler import get_queue_dir
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-try:
-    from openai import OpenAI
-except ImportError:  # pragma: no cover - optional dependency in some environments
-    OpenAI = None
-
 PROCESSED_DIR = Path(
     os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
     or os.environ.get("AGENT_HUB_PROCESSED_DIR")
@@ -102,38 +97,6 @@ def _handle_summarize(env: Envelope) -> dict:
 
     summary = textwrap.shorten(text, width=100, placeholder="…")
     return {"summary": summary}
-
-
-@intent_handler("llm-query")
-def _handle_llm_query(env: Envelope) -> dict:
-    if not isinstance(env.payload, dict):
-        return {"error": "payload must be an object containing 'text'"}
-
-    text = env.payload.get("text")
-    if not isinstance(text, str) or not text.strip():
-        return {"error": "payload.text must be a non-empty string"}
-
-    model = env.payload.get("model")
-    if not isinstance(model, str) or not model.strip():
-        model = "gpt-4o-mini"
-
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return {"error": "OPENAI_API_KEY is not set"}
-
-    if OpenAI is None:
-        return {"error": "openai package is not installed. Install openai>=1.0.0"}
-
-    try:
-        client = OpenAI(api_key=api_key)
-        response = client.responses.create(
-            model=model,
-            input=text,
-        )
-        result = response.output_text or ""
-        return {"result": result}
-    except Exception as exc:
-        return {"error": str(exc)}
 
 
 def _build_reply(env: Envelope, result_payload: Any) -> Envelope:
