@@ -1,63 +1,117 @@
-# AI Agent Hub: An MTA-based OS Layer for Decentralized AI Agents
+# AI Agent Hub
+### 分散型AIエージェントのための、MTAベースOSレイヤー
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue)](#2-core-architecture)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-
-AI Agent Hubは、30年以上の実績を持つメール転送エージェント（MTA）のアーキテクチャを、**高信頼な非同期メッセージバス**として再定義したプロジェクトです。
-
-分散型AIエージェント間の通信・タスク管理・状態遷移を制御するための **メッセージ指向 OS レイヤー** を提供します。
+[![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue)](#アーキテクチャ)
+[![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 
 ---
 
-## 1. Motivation: Why MTA?
+## ビジョン：24時間稼働の「インテリジェント・ニュースルーム」
 
-現代の AI Agent オーケストレーション（Webhook, REST API, gRPC等）には、実用化において以下のクリティカルな課題が存在します。
+あなたが眠っている間も、100体のAIエージェントが静かに、休まず動き続ける——そんな世界を想像してください。
 
-- **信頼性の欠如**: 通信エラー時の再送処理、指数バックオフ、キューイングの実装がアプリケーション側に委ねられており、データの消失リスクが常に伴う。
-- **状態管理の複雑化**: 非同期タスクの実行ログやトレースが分散し、事後的な監査やデバッグが困難。
-- **スケーラビリティの限界**: スパイク的なタスク増加に対し、バッファリング層が不十分。
+世界中のRSSフィード、SNS、ニュースメールが流れ込む。`grep`と`jq`で機械的に高速フィルタリングされ、本当に重要なものだけがLLMに届く。要約はNotion、WordPress、あるいは特定のクライアントへ——自動的に、確実に、1件のロスもなく配信される。
 
-AI Agent Hub は、Postfix/LMTP のエコシステムを「OSのプロセス間通信（IPC）」に転用することで、これらの課題をプロトコルレベルで解決します。
+**AI Agent Hubは、そのために作られています。**
 
-### The Advantages
+チャットボットではありません。実験台でもありません。**24時間365日稼働し、障害に耐え、証拠を残す——ミッションクリティカルなAIエージェント基盤**です。
 
-- **Guaranteed Delivery**: MTAの再送・キュー管理機構により、エージェントがオフラインでもメッセージを確実に保持。
-- **Envelope-based Unified Format**: 全てのAIアクションを「封筒（Envelope）」に封入し、監査ログとして永続化。
-- **Protocol as an Interface**: SMTP/LMTPを抽象化レイヤーとすることで、言語やプラットフォームを問わない自律分散OSを実現。
+---
+
+## 業界標準プロトコルとの棲み分け
+
+A2A（Google）やACP（IBM）といったAIエージェント間通信プロトコルが台頭しています。AI Agent Hubはこれらと競合しません。**その「下」で動くOSレイヤーです。**
+
+> *「最新プロトコルは、Hubというインフラの上でこそ安心して走り回れる。」*
+
+### なぜ共存できるのか
+
+A2AもACPも「**どう通信するか**」を定義します。しかし「**通信の履歴をどう永続化し、どう監査するか**」というOS的な機能は、現状どちらも薄い。ここがAI Agent Hubの専売特許です。
+
+| 比較項目 | A2A (Google) / ACP | AI Agent Hub |
+|---------|-------------------|-------------|
+| トランスポート | HTTPS（同期/準同期） | SMTP/LMTP（非同期） |
+| 主な関心事 | データ構造・認証・タスク定義 | 配送保証・再送・永続化・監査 |
+| 得意なこと | AI同士の高速セッション | 大量タスク管理・障害耐性・人間との接続 |
+| 立ち位置 | 「言語（Protocol）」 | 「物流網（OS / Infrastructure）」 |
+
+### 具体的な共存シナリオ
+
+```
+A2A / ACP（リアルタイム通信）
+        ↓ タイムアウト・障害・高負荷
+AI Agent Hub（耐障害性キュー層）
+        ↓
+  確実に処理・不変ログ保存・リトライ
+```
+
+**「どのエージェントが、どのコマンドを発行し、その時どんなLLMがどう考えたか」**——この全工程を1つのEnvelopeスレッドとして可視化します。企業がAI導入で直面する最大の障壁「ブラックボックス化」を、MTAという30年の実績を持つ透明性の高い通信ログで解決します。
+
+### A2A/ACPが普及するほど、Hubの価値が上がる
+
+GoogleのA2Aが広まるほど、「それを安全に運用するための基盤」としてAI Agent Hubの需要が生まれます。これは競合関係ではなく、**エコシステムとしての共進化**です。
+
+---
+
+## なぜ重要か：インフラグレードAIの三本柱
+
+### ① 衝撃吸収材 — 再送・遅延耐性
+
+従来のWebシステムは「今すぐ返せ、さもなくば死ね」という世界です。REST APIは静かに失敗し、キューは後付けで継ぎ足される。
+
+AI Agent Hubは設計思想から違います。MTAレイヤーが**構造的に衝撃を吸収します**：
+
+- **Thundering Herd（落雷現象）の回避**：朝8時に1,000通のニュースメールが届いても、MTAが自動でトラフィックを制御——LLMのレート制限に合わせて100通ずつ流します。カスタムのスロットリングコードは一切不要。
+- **バックオフの自動化**：WordPressがメンテナンス中なら、Postfixが「4時間後に再送」と自動スケジュール。Workerに複雑な`try/catch`リトライループを書く必要はありません。プロトコルが処理します。
+
+> *「エージェントはオフラインになれる。メッセージはなれない。」*
+
+### ② 編集長の目 — 監査とトレーサビリティ
+
+AIを本番環境に投入する最大の不安：*「なぜこうなったか分からない」*。
 
 AI Agent Hubはこれを**プロトコルレベルの不変ログ**で解決します：
 
-## 2. Core Architecture
+- ソースメール → フィルタ通過後のテキスト → LLMへのプロンプト → 生の回答 → Notion投稿コマンド——全工程が`thread_id`で連鎖するEnvelopeとして物理的に保存されます。
+- 「要約がおかしい」となったとき、1つのEnvelopeスレッドを開けば「どのエージェントが、どの瞬間にトチったか」が秒で分かります。5つのサービスにまたがるログをgrepする必要はありません。
+- これは分散AIパイプラインにおける**スタックトレース**です。
 
-本プロジェクトは、Postfixを「メッセージルータ」として、独自Handlerを「OSカーネル」として位置づけています。
+### ③ ポリシーゲートウェイ — ガバナンスとコントロール
 
-### Pipeline Flow
+100体のAIを野放しにしない。AI Agent Hubはルールをインフラ層で強制します：
+
+- **コンテンツフィルタリング**：MilterベースのサニタイザーエージェントがPIIを除去し、不適切なコンテンツをLLMに届く前にブロック——アプリケーションコードには一切手を触れずに。
+- **Human-in-the-Loop**：重要度「高」のアイテムは承認メールをあなたに送信。あなたが「OK」と返信したときだけ後続のWorkerが動く。カスタムオーケストレーションロジックはゼロ。
+
+---
+
+## アーキテクチャ
 
 ```mermaid
 flowchart TD
     subgraph Agents["🤖 AI Agents"]
-        A1["Agent Sender<br/>https://example.com/@alice"]
-        A2["Agent Worker<br/>https://agent.local/@worker"]
+        A1["Agent Sender\nhttps://example.com/@alice"]
+        A2["Agent Worker\nhttps://agent.local/@worker"]
     end
 
     subgraph MTA["📬 MTA Layer (Postfix)"]
-        SMTP["SMTP :25<br/><i>alice@localhost</i>"]
+        SMTP["SMTP :25\nalice@localhost"]
         PF["Postfix Router"]
-        LMTP["LMTP Server :8024<br/><i>asyncio</i>"]
+        LMTP["LMTP Server :8024\nasyncio"]
     end
 
     subgraph Bridge["🔀 変換レイヤー（メール世界 → Agent世界）"]
         MIME["message_from_bytes()"]
-        EX["extract_sender/recipient()"]
-        RE["_AGENT_ID_PATTERN<br/><i>URIを抽出</i>"]
+        EX["extract_sender / recipient()"]
+        RE["_AGENT_ID_PATTERN\nURIを抽出"]
     end
 
     subgraph Kernel["⚙️ Kernel Layer"]
-        ENV["Envelope.new()<br/><i>sender= URI</i>"]
-        QUEUE["Queue<br/>./queue/*.json"]
-        WORKER["Agent Worker<br/>Intent Dispatcher"]
-        DLQ["Dead Letter Queue<br/>./failed/"]
+        ENV["Envelope.new()\nsender= URI"]
+        QUEUE["Queue\n./queue/*.json"]
+        WORKER["Agent Worker\nIntent Dispatcher"]
+        DLQ["Dead Letter Queue\n./failed/"]
     end
 
     subgraph Intents["🧠 Intent Handlers"]
@@ -85,25 +139,13 @@ flowchart TD
     SMTP --> A2
 ```
 
-### 変換レイヤーの設計思想
-
-本システムの重要な設計ポイントとして、**メール世界とAgent世界の橋渡し**があります。
-
-SMTPの`From:`/`To:`ヘッダはメールアドレス（`alice@localhost`）ですが、Envelopeが扱うのはエージェントのURI（`https://example.com/@alice`）です。`_AGENT_ID_PATTERN` はこの変換を担う接着剤であり、「SMTPをトランスポートとして使いながら、意味的にはURIベースのエージェント通信を行う」という設計を支えています。
-
-```
-From: https://example.com/@alice <alice@localhost>
-        ↓ _AGENT_ID_PATTERN
-sender = "https://example.com/@alice"
-```
-
 ---
 
-## 3. Key Concepts
+## コアコンセプト
 
-### Envelope Model
+### Envelopeモデル
 
-全ての通信は以下の構造を持つ Envelope 型で定義されます。AI間の「会話」はすべてスレッド化され、トレーサビリティを確保します。
+AI Agent Hubにおける全ての通信は**Envelope**——構造化された不変の作業単位——に封入されます。
 
 ```json
 {
@@ -113,48 +155,133 @@ sender = "https://example.com/@alice"
   "envelope_type": "TASK_EXECUTION",
   "payload": {
     "intent": "summarize",
-    "text": "Extract business insights from recent PRs"
+    "text": "最近のPRからビジネスインサイトを抽出してください"
   },
   "context": {
     "thread_id": "tx_9987",
     "in_reply_to": "uuid-v3",
     "priority": "high"
   },
-  "created_at": "2026-02-18T23:00:00Z",
-  "version": "1.0"
+  "created_at": "2026-02-18T23:00:00Z"
 }
 ```
 
-### Intent Handlers
+全てのAI間会話は`thread_id`でスレッド化され、マルチエージェントパイプライン全体のトレーサビリティを確保します。
 
-Agent Worker はペイロードの `intent` フィールドに基づいてハンドラを振り分けます。現在実装済みのintentは以下の通りです。
+### 変換レイヤー：SMTP ↔ Agent世界
 
-| Intent | 説明 |
-|---|---|
-| `ping` | 疎通確認 |
-| `echo` | テキストをそのまま返す |
-| `summarize` | テキストを要約して返す |
-| `help` / `list-intents` | 利用可能なintent一覧を返す |
+AI Agent Hubは2つの世界を橋渡しします：
 
-### High Durability & Auditability
+| レイヤー | IDフォーマット |
+|---------|--------------|
+| SMTP（トランスポート） | `alice@localhost` |
+| Envelope（エージェント） | `https://example.com/@alice` |
 
-MTA をバックボーンに据えることで、インフラ障害時でもメッセージの整合性を保証します。金融機関や大規模基盤で培われた「確実に届ける」技術のAI領域への応用です。
+`_AGENT_ID_PATTERN`正規表現がメールヘッダからURIを抽出し、**メールインフラとエージェントセマンティクスの変換レイヤー**として機能します。これは回避策ではなく、設計そのものです。
 
----
+### プロトコルをインターフェースとして
 
-## 4. Roadmap & Future Visions
-
-- **ActivityPub Federation**: エージェントIDが既に `https://domain/@name` 形式を採用しており、分散SNSプロトコルを拡張したAIエージェント間の「フォロー/パブリッシュ」モデルへの発展を想定。
-- **Serverless Scaling**: SQS + Lambda / Oracle Cloud ARM インスタンスによる、コスト効率の高い水平スケーリングのサポート。
-- **CLI as a Skill**: AI が直接 Bash コマンドを叩くための「Skills」パッケージ管理の実装（OpenClaw思想）。
-- **LLM Skill**: `intent: llm-query` による LLM API（OpenAI / Anthropic）との直接連携。
+SMTP/LMTPを抽象化レイヤーとすることで、AI Agent Hubは：
+- **言語非依存**：SMTPを話せるプロセスなら何でも参加できる
+- **プラットフォーム非依存**：Linux、クラウド、オンプレ——Postfixが動く場所ならエージェントも動く
+- **運用互換**：標準のメール監視ツール（`mailq`、`postqueue`）がそのまま使える
 
 ---
 
-## 5. About the Author
+## パイプラインフロー
 
-2019年より、日本およびベトナムにて MTA (C/PHP) を用いた大規模メールセキュリティ製品の設計・実装・運用を一貫して担当。
+```
+1. Submission  → Agent が Envelope（JSON）を SMTP 経由で送信
+2. Routing     → Postfix が宛先に基づきルーティング、LMTP 経由で配送
+3. Parsing     → LMTP Handler が MIME をデコード、Agent URI を抽出
+4. Persistence → Envelope をキューディレクトリにアトミックに保存
+5. Execution   → Agent Worker が intent をピックアップし、ハンドラまたは LLM スキルを実行
+6. Reply       → 結果を Envelope として再封入し、SMTP 経由で返信
+```
 
-> 「枯れた技術を最新のパラダイムで再定義する」
+---
 
-インフラレベルの視座から、AI Agent が真に「社会のインフラ」となるための高信頼なメッセージング基盤を追求している、シニアソフトウェアエンジニア。
+## クイックスタート
+
+```bash
+# クローンとインストール
+git clone https://github.com/raberabe1121/ai-agent-os.git
+cd ai-agent-os
+pip install -e .
+
+# LMTPサーバーを起動
+python -m ai_agent_hub.lmtp_server
+
+# 別ターミナルでWorkerを起動
+python -m ai_agent_hub.agent_worker
+
+# 最初のEnvelopeを送信
+python -c "
+from ai_agent_hub import Envelope
+from ai_agent_hub.smtp_sender import send_envelope_via_smtp
+
+env = Envelope.new(
+    envelope_type='TASK',
+    sender='https://myapp.local/@orchestrator',
+    recipient='https://myapp.local/@worker',
+    payload={'intent': 'ping'}
+)
+send_envelope_via_smtp(env)
+print('Envelope sent:', env.id)
+"
+```
+
+---
+
+## ユースケース
+
+### インテリジェント・ニュースルーム（リファレンスアーキテクチャ）
+
+```
+RSS / SNS / ニュースメール
+        ↓
+CollectorAgent        ← 監視・収集
+        ↓ Envelope
+FilterAgent           ← grep / jq で高速フィルタリング（LLM不使用）
+        ↓ 通過したものだけ
+SummarizerAgent × N   ← LLMで要約（重い処理はここだけ）
+        ↓ Envelope
+DistributorAgent      ← Notion / WordPress / メール配信
+```
+
+**コスト設計のポイント**：LLMが呼ばれるのはCLIフィルタリングを通過したものだけ。90%のアイテムは高コストなステップに到達しません。
+
+### 競合調査レポートボット（収益化シナリオ）
+
+| 顧客の不安 | Hubの回答 |
+|-----------|----------|
+| 「AIが嘘をついたり、機密情報を漏らしたら？」 | 全ペイロードはサニタイザーエージェントを通過。PIIはLLMが見る前に除去され、全判断はログに残ります。 |
+| 「システムが止まったら？」 | Postfixがキューを保持します。障害中もメッセージは1件も消えません。 |
+| 「何が起きたか後から確認できるか？」 | Envelopeスレッドを開けば、全ステップがそこにあります。 |
+
+---
+
+## ロードマップ
+
+| フェーズ | 機能 | ステータス |
+|---------|------|----------|
+| v0.2 | LMTPサーバー、Envelopeモデル、Agent Worker、SMTP返信 | ✅ 完了 |
+| v0.3 | `llm-query` intent、CLIスキル（gh-cli、jq）、SQLite永続化 | 🔨 開発中 |
+| v0.4 | Dead Letter Queue、inotifyベースWorker、並列処理 | 📋 計画中 |
+| v1.0 | ActivityPubフェデレーション、セキュリティレイヤー（PIIフィルタリング）、サーバーレススケーリング | 🔭 構想中 |
+
+---
+
+## 作者について
+
+2019年より、日本およびベトナムにてMTA（C/PHP）を用いた大規模メールセキュリティ製品の設計・実装・運用を一貫して担当するシニアソフトウェアエンジニア。
+
+> *「枯れた技術を最新のパラダイムで再定義する」*
+
+インフラレベルの視座から、AIエージェントが真に「社会のインフラ」となるための高信頼なメッセージング基盤を追求しています。
+
+---
+
+## ライセンス
+
+MIT — 詳細は [LICENSE](LICENSE) を参照してください。
