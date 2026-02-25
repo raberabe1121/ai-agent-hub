@@ -12,11 +12,15 @@ from ai_agent_hub import Envelope
 from ai_agent_hub.lmtp_handler import get_queue_dir
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-PROCESSED_DIR = Path(
-    os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
-    or os.environ.get("AGENT_HUB_PROCESSED_DIR")
-    or "./processed"
-)
+def _get_processed_dir() -> Path:
+    """Return processed directory, evaluated at call time."""
+    return Path(
+        os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
+        or os.environ.get("AGENT_HUB_PROCESSED_DIR")
+        or "./processed"
+    )
+
+PROCESSED_DIR = _get_processed_dir()
 
 
 INTENT_HANDLERS: Dict[str, Callable[[Envelope], Optional[Any]]] = {}
@@ -147,8 +151,9 @@ def process_next_envelope() -> bool:
     env = _load_envelope(file_path)
     reply = _handle_envelope(env)
 
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    destination = PROCESSED_DIR / file_path.name
+    processed_dir = _get_processed_dir()
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    destination = processed_dir / file_path.name
     file_path.rename(destination)
 
     if reply:
