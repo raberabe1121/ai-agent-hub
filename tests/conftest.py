@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from ai_agent_hub import Envelope
 import ai_agent_hub.agent_worker as agent_worker
+import ai_agent_hub.lmtp_handler as lmtp_handler
 
 
 @pytest.fixture(autouse=True)
@@ -22,10 +23,9 @@ def queue_dirs(tmp_path, monkeypatch):
     queue_dir.mkdir()
     processed_dir.mkdir()
 
-    monkeypatch.setenv("AI_AGENT_HUB_QUEUE_DIR", str(queue_dir))
-    monkeypatch.setenv("AGENT_HUB_QUEUE_DIR", str(queue_dir))
     monkeypatch.setattr(agent_worker, "get_queue_dir", lambda: queue_dir)
     monkeypatch.setattr(agent_worker, "PROCESSED_DIR", processed_dir)
+    monkeypatch.setattr(lmtp_handler, "get_queue_dir", lambda: queue_dir)
 
     return queue_dir, processed_dir
 
