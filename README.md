@@ -1,43 +1,53 @@
-# AI Agent Hub — Envelope OS
-### v0.4 | "The SMTP for the Agentic Era."
+# AI Agent Hub
+### 分散型AIエージェントのための、MTAベースOSレイヤー
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue)](#アーキテクチャ)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![Version: 0.4](https://img.shields.io/badge/Version-v0.4-green)](#roadmap)
-
-> AI知能（Brain）と社会（Reality）を繋ぐ、エージェント専用のガバナンス・メッセージングOS。
 
 ---
 
-## 概要
+## ビジョン：24時間稼働の「インテリジェント・ニュースルーム」
 
-AI Agent Hub（Envelope OS）は、SMTP/MIMEプロトコルを基盤とした、自律型AIエージェントのための**「配送・統制レイヤー」**です。
+あなたが眠っている間も、100体のAIエージェントが静かに、休まず動き続ける——そんな世界を想像してください。
 
-2026年、AIの知能は飛躍的に向上しましたが、エージェント間の**「情報の過多による知能低下」「経済的暴走」「集団催眠的なハルシネーション」**といった課題が浮き彫りになっています。
+世界中のRSSフィード、SNS、ニュースメールが流れ込む。`grep`と`jq`で機械的に高速フィルタリングされ、本当に重要なものだけがLLMに届く。要約はNotion、WordPress、あるいは特定のクライアントへ——自動的に、確実に、1件のロスもなく配信される。
 
-本プロジェクトは、知能（LLM）の外側に**物理的な規律（Policy）と不変の記録（Audit）**を配置することで、AIエージェントを社会に実装可能な「責任ある労働力」へと変革します。
+**AI Agent Hubは、そのために作られています。**
+
+チャットボットではありません。実験台でもありません。**24時間365日稼働し、障害に耐え、証拠を残す——ミッションクリティカルなAIエージェント基盤**です。
 
 ---
 
-## Governance over Intelligence：3つの物理的制約
+## なぜ重要か：インフラグレードAIの三本柱
 
-どれだけAIが賢くなっても、知能の内部に閉じ込められない**「3つの物理的制約」**をHubが担います。
+### ① 衝撃吸収材 — 再送・遅延耐性
 
-### ① 物理的証拠（Evidence）
-AIの自己申告ではなく、配送された**「封筒（MIME）」そのものを改ざん不能な証拠**として残す。
+従来のWebシステムは「今すぐ返せ、さもなくば死ね」という世界です。REST APIは静かに失敗し、キューは後付けで継ぎ足される。
 
-「どのエージェントが、どのコマンドを発行し、その時どんなLLMがどう考えたか」——この全工程が`thread_id`で連鎖するEnvelopeとして物理的に保存されます。企業がAI導入で直面する最大の障壁「ブラックボックス化」を、MTAという30年の実績を持つ透明性の高い通信ログで解決します。
+AI Agent Hubは設計思想から違います。MTAレイヤーが**構造的に衝撃を吸収します**：
 
-### ② 物理的制約（Enforcement）
-予算（Circle/USDC）やリソース（API Quota）の物理的な**「蛇口」をHubが握る**。
+- **Thundering Herd（落雷現象）の回避**：朝8時に1,000通のニュースメールが届いても、MTAが自動でトラフィックを制御——LLMのレート制限に合わせて100通ずつ流します。カスタムのスロットリングコードは一切不要。
+- **バックオフの自動化**：WordPressがメンテナンス中なら、Postfixが「4時間後に再送」と自動スケジュール。Workerに複雑な`try/catch`リトライループを書く必要はありません。プロトコルが処理します。
 
-`X-Agent-Cost-Center`ヘッダによる予算執行トラッキング、`X-Agent-Payment-Required`による決済トリガーにより、AIエージェントの経済的暴走をプロトコルレベルで制御します。
+> *「エージェントはオフラインになれる。メッセージはなれない。」*
 
-### ③ 異質性の注入（Entropy）
-AI同士の同調バイアス（統計的集団催眠）を、**Hub側からの「外部情報の強制注入」によって物理的に解消**する。
+### ② 編集長の目 — 監査とトレーサビリティ
 
-Consensus Entropy Monitorがメッセージの類似度を監視し、エントロピーが低下（＝思考が均質化）した場合、強制的に推論の枝を分岐させるコンテキストを注入します。
+AIを本番環境に投入する最大の不安：*「なぜこうなったか分からない」*。
+
+AI Agent Hubはこれを**プロトコルレベルの不変ログ**で解決します：
+
+- ソースメール → フィルタ通過後のテキスト → LLMへのプロンプト → 生の回答 → Notion投稿コマンド——全工程が`thread_id`で連鎖するEnvelopeとして物理的に保存されます。
+- 「要約がおかしい」となったとき、1つのEnvelopeスレッドを開けば「どのエージェントが、どの瞬間にトチったか」が秒で分かります。5つのサービスにまたがるログをgrepする必要はありません。
+- これは分散AIパイプラインにおける**スタックトレース**です。
+
+### ③ ポリシーゲートウェイ — ガバナンスとコントロール
+
+100体のAIを野放しにしない。AI Agent Hubはルールをインフラ層で強制します：
+
+- **コンテンツフィルタリング**：MilterベースのサニタイザーエージェントがPIIを除去し、不適切なコンテンツをLLMに届く前にブロック——アプリケーションコードには一切手を触れずに。
+- **Human-in-the-Loop**：重要度「高」のアイテムは承認メールをあなたに送信。あなたが「OK」と返信したときだけ後続のWorkerが動く。カスタムオーケストレーションロジックはゼロ。
 
 ---
 
@@ -45,14 +55,14 @@ Consensus Entropy Monitorがメッセージの類似度を監視し、エント�
 
 ```mermaid
 flowchart TD
-    subgraph Agents["🤖 AI Agents (A2A / ACP / MCP)"]
+    subgraph Agents["🤖 AI Agents"]
         A1["Agent Sender\nhttps://example.com/@alice"]
         A2["Agent Worker\nhttps://agent.local/@worker"]
     end
 
     subgraph MTA["📬 MTA Layer (Postfix)"]
         SMTP["SMTP :25\nalice@localhost"]
-        PF["Postfix Router\n+ Governance Milter"]
+        PF["Postfix Router"]
         LMTP["LMTP Server :8024\nasyncio"]
     end
 
@@ -62,29 +72,33 @@ flowchart TD
         RE["_AGENT_ID_PATTERN\nURIを抽出"]
     end
 
-    subgraph Kernel["⚙️ Envelope OS Kernel"]
+    subgraph Kernel["⚙️ Kernel Layer"]
         ENV["Envelope.new()\nsender= URI"]
         QUEUE["Queue\n./queue/*.json"]
         WORKER["Agent Worker\nIntent Dispatcher"]
         DLQ["Dead Letter Queue\n./failed/"]
     end
 
-    subgraph Governance["🛡️ Governance Layer"]
-        POL["X-Agent-Policy\n機密情報遮断"]
-        COST["X-Agent-Cost-Center\n予算執行"]
-        ENT["Consensus Entropy Monitor\n同調バイアス検知"]
+    subgraph Intents["🧠 Intent Handlers"]
+        I1["ping"]
+        I2["echo"]
+        I3["summarize"]
+        I4["llm-query (roadmap)"]
     end
 
-    A1 -->|"MIME Envelope"| SMTP
+    A1 -->|"From: https://../@alice &lt;alice@localhost&gt;"| SMTP
     SMTP --> PF
-    PF --> Governance
     PF -->|LMTP| LMTP
     LMTP --> MIME
     MIME --> EX
     EX --> RE
-    RE --> ENV
+    RE -->|"sender= https://../@alice"| ENV
     ENV --> QUEUE
     QUEUE --> WORKER
+    WORKER --> I1
+    WORKER --> I2
+    WORKER --> I3
+    WORKER --> I4
     WORKER -->|失敗時| DLQ
     WORKER -->|"Reply Envelope"| SMTP
     SMTP --> A2
@@ -92,55 +106,11 @@ flowchart TD
 
 ---
 
-## Key Features：2026 Stack
+## コアコンセプト
 
-### 1. Protocol Aggregator（A2A / MCP / ACP対応）
+### Envelopeモデル
 
-`gstack`のような開発特化型、`MiroFish`のようなGUI操作型など、出自の異なるエージェントを**MIME Envelopeでカプセル化**し、統合管理します。A2AやACPが「どう通信するか」を定義するのに対し、Hubは**「通信の履歴をどう永続化し、どう監査するか」**というOS的な機能を担います。
-
-| プロトコル | 役割 | Hubとの関係 |
-|-----------|------|------------|
-| A2A (Google) | エージェント間通信 | HubがEnvelopeで受け取り永続化 |
-| MCP (Anthropic) | ツール・コンテキスト提供 | HubのSkillsとして統合 |
-| ACP (IBM) | エージェント協調 | HubがガバナンスレイヤーとしてWrap |
-
-### 2. Governance Milter（AIGS Compliance）
-
-AI Governance Stack（AIGS）に準拠したフィルタリング機能をPostfix Milterとして実装。
-
-```
-X-Agent-Policy: confidential=block, pii=mask
-X-Agent-Cost-Center: dept=engineering, budget=100USD/day
-```
-
-組織外への機密情報漏洩を**配送レイヤーで遮断**し、全ての判断をEnvelopeに記録します。
-
-### 3. Agentic Payment Gateway（Circle Integration）
-
-Circle社のUSDC決済をHubの配送トリガーに統合。
-
-```
-X-Agent-Payment-Required: amount=0.10USDC, recipient=agent.local/@executor
-```
-
-**メール1通で「業務依頼・決済・領収書発行」を完結**させます。AIエージェントの経済的自律性をプロトコルレベルで制御します。
-
-### 4. Consensus Entropy Monitor
-
-AI同士の相互チェックが「同調バイアス」に陥るのを防ぐため、メッセージの類似度をリアルタイム監視。
-
-```python
-# エントロピーが閾値以下に低下した場合
-# → 外部情報を強制注入してコンテキストを分岐
-if entropy_score < THRESHOLD:
-    inject_divergent_context(thread_id)
-```
-
----
-
-## Envelope Model
-
-全ての通信はEnvelopeに封入されます。
+AI Agent Hubにおける全ての通信は**Envelope**——構造化された不変の作業単位——に封入されます。
 
 ```json
 {
@@ -150,79 +120,67 @@ if entropy_score < THRESHOLD:
   "envelope_type": "TASK_EXECUTION",
   "payload": {
     "intent": "summarize",
-    "text": "競合他社の最新動向を調査してください"
+    "text": "最近のPRからビジネスインサイトを抽出してください"
   },
   "context": {
     "thread_id": "tx_9987",
     "in_reply_to": "uuid-v3",
-    "priority": "high",
-    "cost_center": "research_dept",
-    "policy": "internal_only"
+    "priority": "high"
   },
-  "created_at": "2026-03-19T00:00:00Z"
+  "created_at": "2026-02-18T23:00:00Z"
 }
 ```
 
+全てのAI間会話は`thread_id`でスレッド化され、マルチエージェントパイプライン全体のトレーサビリティを確保します。
+
+### 変換レイヤー：SMTP ↔ Agent世界
+
+AI Agent Hubは2つの世界を橋渡しします：
+
+| レイヤー | IDフォーマット |
+|---------|--------------|
+| SMTP（トランスポート） | `alice@localhost` |
+| Envelope（エージェント） | `https://example.com/@alice` |
+
+`_AGENT_ID_PATTERN`正規表現がメールヘッダからURIを抽出し、**メールインフラとエージェントセマンティクスの変換レイヤー**として機能します。これは回避策ではなく、設計そのものです。
+
+### プロトコルをインターフェースとして
+
+SMTP/LMTPを抽象化レイヤーとすることで、AI Agent Hubは：
+- **言語非依存**：SMTPを話せるプロセスなら何でも参加できる
+- **プラットフォーム非依存**：Linux、クラウド、オンプレ——Postfixが動く場所ならエージェントも動く
+- **運用互換**：標準のメール監視ツール（`mailq`、`postqueue`）がそのまま使える
+
 ---
 
-## 業界標準プロトコルとの棲み分け
+## パイプラインフロー
 
-> *「最新プロトコルは、Hubというインフラの上でこそ安心して走り回れる。」*
-
-A2AやACPが普及するほど、「それを安全に運用するための基盤」としてAI Agent Hubの需要が生まれます。これは競合関係ではなく、**エコシステムとしての共進化**です。
-
-| 比較項目 | A2A / ACP | AI Agent Hub |
-|---------|-----------|-------------|
-| トランスポート | HTTPS（同期） | SMTP/LMTP（非同期） |
-| 主な関心事 | 通信の構造・認証 | 配送保証・永続化・監査 |
-| 立ち位置 | 「言語（Protocol）」 | 「物流網 + 法律（OS）」 |
-
----
-
-## Roadmap：AGI対応インフラへの進化
-
-### Phase 1（Now–2028）：Orchestration
-**知能の未熟さを補う。**
-
-再試行・失敗回復・MiroFishによるレガシーGUI操作の代行。LLMが間違えても、Hubが「やり直し」を保証します。
-
-- ✅ LMTP Server（asyncio）
-- ✅ Envelope Model + Agent Worker
-- ✅ Dead Letter Queue
-- 🔨 `llm-query` intent + CLI Skills
-- 🔨 SQLite永続化レイヤー
-
-### Phase 2（2028–2035）：Governance
-**知能の自律性を統制する。**
-
-複数のAIを組織（gstack流の役割分担）として機能させ、予算と権限を管理。AIエージェントが「社会的な労働力」として機能するための法的・経済的インフラを構築します。
-
-- 📋 Governance Milter（AIGS Compliance）
-- 📋 Circle/USDC Payment Gateway
-- 📋 Consensus Entropy Monitor
-- 📋 ActivityPub Federation
-
-### Phase 3（2035–）：Social Proof
-**「完璧なAI」が正しく動いたことを、人間に証明する。**
-
-AIが高度な自律性を持つ時代において、その判断の正当性を第三者に証明するための**公証人インフラ**としての役割を担います。MTA由来の不変ログが、AIの行動の「法的証拠」となります。
+```
+1. Submission  → Agent が Envelope（JSON）を SMTP 経由で送信
+2. Routing     → Postfix が宛先に基づきルーティング、LMTP 経由で配送
+3. Parsing     → LMTP Handler が MIME をデコード、Agent URI を抽出
+4. Persistence → Envelope をキューディレクトリにアトミックに保存
+5. Execution   → Agent Worker が intent をピックアップし、ハンドラまたは LLM スキルを実行
+6. Reply       → 結果を Envelope として再封入し、SMTP 経由で返信
+```
 
 ---
 
 ## クイックスタート
 
 ```bash
+# クローンとインストール
 git clone https://github.com/raberabe1121/ai-agent-os.git
 cd ai-agent-os
 pip install -e .
 
-# LMTPサーバー起動
+# LMTPサーバーを起動
 python -m ai_agent_hub.lmtp_server
 
-# Agent Worker起動（別ターミナル）
+# 別ターミナルでWorkerを起動
 python -m ai_agent_hub.agent_worker
 
-# Envelopeを送信
+# 最初のEnvelopeを送信
 python -c "
 from ai_agent_hub import Envelope
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
@@ -240,11 +198,52 @@ print('Envelope sent:', env.id)
 
 ---
 
+## ユースケース
+
+### インテリジェント・ニュースルーム（リファレンスアーキテクチャ）
+
+```
+RSS / SNS / ニュースメール
+        ↓
+CollectorAgent        ← 監視・収集
+        ↓ Envelope
+FilterAgent           ← grep / jq で高速フィルタリング（LLM不使用）
+        ↓ 通過したものだけ
+SummarizerAgent × N   ← LLMで要約（重い処理はここだけ）
+        ↓ Envelope
+DistributorAgent      ← Notion / WordPress / メール配信
+```
+
+**コスト設計のポイント**：LLMが呼ばれるのはCLIフィルタリングを通過したものだけ。90%のアイテムは高コストなステップに到達しません。
+
+### 競合調査レポートボット（収益化シナリオ）
+
+| 顧客の不安 | Hubの回答 |
+|-----------|----------|
+| 「AIが嘘をついたり、機密情報を漏らしたら？」 | 全ペイロードはサニタイザーエージェントを通過。PIIはLLMが見る前に除去され、全判断はログに残ります。 |
+| 「システムが止まったら？」 | Postfixがキューを保持します。障害中もメッセージは1件も消えません。 |
+| 「何が起きたか後から確認できるか？」 | Envelopeスレッドを開けば、全ステップがそこにあります。 |
+
+---
+
+## ロードマップ
+
+| フェーズ | 機能 | ステータス |
+|---------|------|----------|
+| v0.2 | LMTPサーバー、Envelopeモデル、Agent Worker、SMTP返信 | ✅ 完了 |
+| v0.3 | `llm-query` intent、CLIスキル（gh-cli、jq）、SQLite永続化 | 🔨 開発中 |
+| v0.4 | Dead Letter Queue、inotifyベースWorker、並列処理 | 📋 計画中 |
+| v1.0 | ActivityPubフェデレーション、セキュリティレイヤー（PIIフィルタリング）、サーバーレススケーリング | 🔭 構想中 |
+
+---
+
 ## 作者について
 
 2019年より、日本およびベトナムにてMTA（C/PHP）を用いた大規模メールセキュリティ製品の設計・実装・運用を一貫して担当するシニアソフトウェアエンジニア。
 
-> *「枯れた技術を最新のパラダイムで再定義する。知能（LLM）の外側に、物理的な規律と不変の記録を置く。」*
+> *「枯れた技術を最新のパラダイムで再定義する」*
+
+インフラレベルの視座から、AIエージェントが真に「社会のインフラ」となるための高信頼なメッセージング基盤を追求しています。
 
 ---
 
