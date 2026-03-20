@@ -57,6 +57,16 @@ class LMTPServer:
             flush=True,
         )
 
+
+    async def stop(self) -> None:
+        """Stop the LMTP server and release its socket."""
+
+        if self._server is None:
+            return
+        self._server.close()
+        await self._server.wait_closed()
+        self._server = None
+
     async def serve_forever(self) -> None:
         if self._server is None:
             await self.start()

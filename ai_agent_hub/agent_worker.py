@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import importlib
 import os
 import textwrap
 import time
@@ -9,18 +10,21 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.lmtp_handler import get_queue_dir
+from ai_agent_hub.lmtp_handler import (
+    FAILED,
+    PROCESSED,
+    FileSystemRepository,
+    SQLiteRepository,
+    get_queue_dir,
+    get_repository,
+)
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-def _get_processed_dir() -> Path:
-    """Return processed directory, evaluated at call time."""
-    return Path(
-        os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
-        or os.environ.get("AGENT_HUB_PROCESSED_DIR")
-        or "./processed"
-    )
-
-PROCESSED_DIR = _get_processed_dir()
+PROCESSED_DIR = Path(
+    os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
+    or os.environ.get("AGENT_HUB_PROCESSED_DIR")
+    or "./processed"
+)
 
 
 INTENT_HANDLERS: Dict[str, Callable[[Envelope], Optional[Any]]] = {}
@@ -103,6 +107,35 @@ def _handle_summarize(env: Envelope) -> dict:
     return {"summary": summary}
 
 
+@intent_handler("llm-query")
+def _handle_llm_query(env: Envelope) -> dict:
+    try:
+        openai = importlib.import_module("openai")
+    except ImportError:
+        return {"error": "openai package not installed"}
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {"error": "OPENAI_API_KEY is not set"}
+
+    text = None
+    if isinstance(env.payload, dict):
+        text = env.payload.get("text")
+    if not text:
+        return {"error": "payload.text is required"}
+
+    model = "gpt-4o-mini"
+    if isinstance(env.payload, dict):
+        model = env.payload.get("model", model)
+
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        response = client.responses.create(model=model, input=text)
+        return {"result": response.output_text}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def _build_reply(env: Envelope, result_payload: Any) -> Envelope:
     return Envelope.new(
         envelope_type="reply",
@@ -141,28 +174,52 @@ def _handle_envelope(env: Envelope) -> Optional[Envelope]:
     return _build_reply(env, reply_payload)
 
 
-def process_next_envelope() -> bool:
-    """Process the oldest envelope in the queue if present."""
+def _mark_processed(env_id: str) -> None:
+    repository = get_repository()
 
-    file_path = _find_oldest_queue_file()
-    if not file_path:
+    if isinstance(repository, SQLiteRepository):
+        repository.mark_status(env_id, PROCESSED)
+        return
+
+    if isinstance(repository, FileSystemRepository):
+        file_path = repository.find_file_by_id(env_id)
+        if file_path is None:
+            return
+        PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+        destination = PROCESSED_DIR / file_path.name
+        file_path.rename(destination)
+
+
+def _mark_failed(env_id: str) -> None:
+    repository = get_repository()
+    if isinstance(repository, SQLiteRepository):
+        repository.mark_status(env_id, FAILED)
+
+
+def process_next_envelope() -> bool:
+    """Process the oldest envelope in storage if present."""
+
+    repository = get_repository()
+    pending = repository.list_pending()
+    if not pending:
         return False
 
-    env = _load_envelope(file_path)
+    env = pending[0]
     reply = _handle_envelope(env)
 
-    processed_dir = _get_processed_dir()
-    processed_dir.mkdir(parents=True, exist_ok=True)
-    destination = processed_dir / file_path.name
-    file_path.rename(destination)
+    try:
+        _mark_processed(env.id)
 
-    if reply:
-        send_envelope_via_smtp(reply)
-    return True
+        if reply:
+            send_envelope_via_smtp(reply)
+        return True
+    except Exception:
+        _mark_failed(env.id)
+        raise
 
 
 def main(poll_interval: float = 1.0) -> None:
-    """Continuously watch the queue directory and process envelopes."""
+    """Continuously watch storage and process envelopes."""
 
     while True:
         processed = process_next_envelope()
