@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import importlib
 import os
 import textwrap
 import time
@@ -10,21 +9,18 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.lmtp_handler import (
-    FAILED,
-    PROCESSED,
-    FileSystemRepository,
-    SQLiteRepository,
-    get_queue_dir,
-    get_repository,
-)
+from ai_agent_hub.lmtp_handler import get_queue_dir
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-PROCESSED_DIR = Path(
-    os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
-    or os.environ.get("AGENT_HUB_PROCESSED_DIR")
-    or "./processed"
-)
+def _get_processed_dir() -> Path:
+    """Return processed directory, evaluated at call time."""
+    return Path(
+        os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
+        or os.environ.get("AGENT_HUB_PROCESSED_DIR")
+        or "./processed"
+    )
+
+PROCESSED_DIR = _get_processed_dir()
 
 
 INTENT_HANDLERS: Dict[str, Callable[[Envelope], Optional[Any]]] = {}
@@ -107,41 +103,6 @@ def _handle_summarize(env: Envelope) -> dict:
     return {"summary": summary}
 
 
-@intent_handler("llm-query")
-def _handle_llm_query(env: Envelope) -> dict:
-    if not isinstance(env.payload, dict):
-        return {"error": "payload must be an object containing 'text'"}
-
-    text = env.payload.get("text")
-    if not isinstance(text, str) or not text.strip():
-        return {"error": "payload.text is required"}
-
-    model = env.payload.get("model")
-    if not isinstance(model, str) or not model.strip():
-        model = "gpt-4o-mini"
-
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return {"error": "OPENAI_API_KEY is not set"}
-
-    try:
-        openai_module = importlib.import_module("openai")
-    except ImportError:
-        return {"error": "openai package not installed"}
-
-    try:
-        client_class = openai_module.OpenAI
-        client = client_class(api_key=api_key)
-        response = client.responses.create(
-            model=model,
-            input=text,
-        )
-        result = response.output_text or ""
-        return {"result": result}
-    except Exception as exc:
-        return {"error": str(exc)}
-
-
 def _build_reply(env: Envelope, result_payload: Any) -> Envelope:
     return Envelope.new(
         envelope_type="reply",
@@ -180,52 +141,28 @@ def _handle_envelope(env: Envelope) -> Optional[Envelope]:
     return _build_reply(env, reply_payload)
 
 
-def _mark_processed(env_id: str) -> None:
-    repository = get_repository()
-
-    if isinstance(repository, SQLiteRepository):
-        repository.mark_status(env_id, PROCESSED)
-        return
-
-    if isinstance(repository, FileSystemRepository):
-        file_path = repository.find_file_by_id(env_id)
-        if file_path is None:
-            return
-        PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-        destination = PROCESSED_DIR / file_path.name
-        file_path.rename(destination)
-
-
-def _mark_failed(env_id: str) -> None:
-    repository = get_repository()
-    if isinstance(repository, SQLiteRepository):
-        repository.mark_status(env_id, FAILED)
-
-
 def process_next_envelope() -> bool:
-    """Process the oldest envelope in storage if present."""
+    """Process the oldest envelope in the queue if present."""
 
-    repository = get_repository()
-    pending = repository.list_pending()
-    if not pending:
+    file_path = _find_oldest_queue_file()
+    if not file_path:
         return False
 
-    env = pending[0]
+    env = _load_envelope(file_path)
     reply = _handle_envelope(env)
 
-    try:
-        _mark_processed(env.id)
+    processed_dir = _get_processed_dir()
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    destination = processed_dir / file_path.name
+    file_path.rename(destination)
 
-        if reply:
-            send_envelope_via_smtp(reply)
-        return True
-    except Exception:
-        _mark_failed(env.id)
-        raise
+    if reply:
+        send_envelope_via_smtp(reply)
+    return True
 
 
 def main(poll_interval: float = 1.0) -> None:
-    """Continuously watch storage and process envelopes."""
+    """Continuously watch the queue directory and process envelopes."""
 
     while True:
         processed = process_next_envelope()
