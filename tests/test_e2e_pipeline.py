@@ -48,7 +48,7 @@ async def wait_for_matching_envelope(
         await asyncio.sleep(0.2)
     return None
 
-
+@pytest.mark.skip(reason="systemd integration test - manual verification only")
 @pytest.mark.asyncio
 async def test_smtp_to_systemd_lmtp_persists_and_worker_reads_queue() -> None:
     """E2E: SMTP submit -> systemd LMTP receive -> queue JSON -> worker processes it."""
