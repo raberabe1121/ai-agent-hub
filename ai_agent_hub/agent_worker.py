@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from ai_agent_hub import Envelope
+from ai_agent_hub.cli_skills import CliSkillRunner
 from ai_agent_hub.entropy_monitor import EntropyMonitor
 from ai_agent_hub.payment_gateway import PaymentGateway
 from ai_agent_hub.lmtp_handler import (
@@ -154,6 +155,59 @@ def _handle_entropy_check(env: Envelope) -> dict:
         "injected_context": injected_context,
     }
 
+
+
+
+@intent_handler("cli-skill")
+def _handle_cli_skill(env: Envelope) -> dict:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict", "exit_code": 1}
+
+    skill = env.payload.get("skill")
+    args = env.payload.get("args", [])
+    stdin = env.payload.get("stdin")
+
+    if not isinstance(skill, str) or not skill:
+        return {"error": "payload.skill is required", "exit_code": 1}
+    if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+        return {"error": "payload.args must be a list[str]", "exit_code": 1}
+    if stdin is not None and not isinstance(stdin, str):
+        return {"error": "payload.stdin must be a string or null", "exit_code": 1}
+
+    return CliSkillRunner().run(skill=skill, args=args, stdin=stdin)
+
+
+@intent_handler("cli-pipeline")
+def _handle_cli_pipeline(env: Envelope) -> dict:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict", "exit_code": 1}
+
+    steps = env.payload.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return {"error": "payload.steps must be a non-empty list", "exit_code": 1}
+
+    runner = CliSkillRunner()
+    stdin: str | None = None
+    last_result: dict[str, Any] = {"error": "payload.steps must be a non-empty list", "exit_code": 1}
+
+    for step in steps:
+        if not isinstance(step, dict):
+            return {"error": "each pipeline step must be a dict", "exit_code": 1}
+
+        skill = step.get("skill")
+        args = step.get("args", [])
+
+        if not isinstance(skill, str) or not skill:
+            return {"error": "each pipeline step requires skill", "exit_code": 1}
+        if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+            return {"error": "each pipeline step args must be a list[str]", "exit_code": 1}
+
+        last_result = runner.run(skill=skill, args=args, stdin=stdin)
+        if last_result.get("exit_code") != 0:
+            return last_result
+        stdin = last_result.get("output") if isinstance(last_result.get("output"), str) else None
+
+    return last_result
 
 @intent_handler("payment")
 def _handle_payment(env: Envelope) -> dict:
