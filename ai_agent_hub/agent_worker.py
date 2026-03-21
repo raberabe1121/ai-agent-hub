@@ -187,7 +187,8 @@ def _handle_cli_pipeline(env: Envelope) -> dict:
         return {"error": "payload.steps must be a non-empty list", "exit_code": 1}
 
     runner = CliSkillRunner()
-    stdin: str | None = None
+    # Pass payload stdin to the first pipeline step when provided.
+    stdin: str | None = env.payload.get("stdin") if isinstance(env.payload.get("stdin"), str) else None
     last_result: dict[str, Any] = {"error": "payload.steps must be a non-empty list", "exit_code": 1}
 
     for step in steps:
