@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from ai_agent_hub import Envelope
+from ai_agent_hub.payment_gateway import PaymentGateway
 from ai_agent_hub.lmtp_handler import (
     FAILED,
     PROCESSED,
@@ -60,6 +61,12 @@ def _load_envelope(file_path: Path) -> Envelope:
 def _extract_intent(env: Envelope) -> Optional[str]:
     payload = env.payload
     if isinstance(payload, dict):
+        headers = payload.get("headers")
+        if isinstance(headers, dict):
+            payment_required = headers.get("X-Agent-Payment-Required")
+            if str(payment_required).lower() in {"1", "true", "yes"}:
+                return "payment"
+
         intent = payload.get("intent")
         if isinstance(intent, str):
             return intent
@@ -107,13 +114,18 @@ def _handle_summarize(env: Envelope) -> dict:
     return {"summary": summary}
 
 
+@intent_handler("payment")
+def _handle_payment(env: Envelope) -> dict:
+    api_key = os.environ.get("CIRCLE_API_KEY")
+    if not api_key:
+        return {"error": "CIRCLE_API_KEY is not set"}
+
+    gateway = PaymentGateway(api_key=api_key)
+    return gateway.execute(env)
+
+
 @intent_handler("llm-query")
 def _handle_llm_query(env: Envelope) -> dict:
-    try:
-        openai = importlib.import_module("openai")
-    except ImportError:
-        return {"error": "openai package not installed"}
-
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return {"error": "OPENAI_API_KEY is not set"}
@@ -123,6 +135,11 @@ def _handle_llm_query(env: Envelope) -> dict:
         text = env.payload.get("text")
     if not text:
         return {"error": "payload.text is required"}
+
+    try:
+        openai = importlib.import_module("openai")
+    except ImportError:
+        return {"error": "openai package not installed"}
 
     model = "gpt-4o-mini"
     if isinstance(env.payload, dict):
