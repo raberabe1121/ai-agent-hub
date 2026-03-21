@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -179,6 +180,15 @@ class LMTPServer:
             else:
                 payload = payload_data
 
+            # SMTPのMessage-IDからUUIDを抽出してEnvelopeのIDとして使用
+            raw_message_id = msg.get("Message-ID", "")
+            id_match = re.search(
+                r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+                raw_message_id,
+                re.IGNORECASE,
+            )
+            envelope_id = id_match.group(1) if id_match else None
+
             # Create envelope
             env = Envelope.new(
                 envelope_type="email",
@@ -188,6 +198,7 @@ class LMTPServer:
                 context=context,
                 in_reply_to=in_reply_to,
                 created_at=created_at,
+                envelope_id=envelope_id,
             )
 
             # Save to queue
