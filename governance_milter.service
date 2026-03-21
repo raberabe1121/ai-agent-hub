@@ -1,0 +1,15 @@
+[Unit]
+Description=AI Agent Hub Governance Milter
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ai-agent-hub
+ExecStart=/opt/ai-agent-hub/venv/bin/python -m ai_agent_hub.governance_milter
+Restart=always
+RestartSec=2
+User=opc
+Group=opc
+
+[Install]
+WantedBy=multi-user.target
