@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from ai_agent_hub import Envelope
+from ai_agent_hub.entropy_monitor import EntropyMonitor
 from ai_agent_hub.payment_gateway import PaymentGateway
 from ai_agent_hub.lmtp_handler import (
     FAILED,
@@ -29,6 +30,10 @@ PROCESSED_DIR = Path(
 
 
 INTENT_HANDLERS: Dict[str, Callable[[Envelope], Optional[Any]]] = {}
+
+
+def _get_entropy_threshold() -> float:
+    return float(os.environ.get("AI_AGENT_HUB_ENTROPY_THRESHOLD", "0.3"))
 
 
 def intent_handler(name: str) -> Callable[[Callable[[Envelope], Optional[Any]]], Callable[[Envelope], Optional[Any]]]:
@@ -112,6 +117,42 @@ def _handle_summarize(env: Envelope) -> dict:
 
     summary = textwrap.shorten(text, width=100, placeholder="…")
     return {"summary": summary}
+
+
+@intent_handler("entropy-check")
+def _handle_entropy_check(env: Envelope) -> dict:
+    threshold = _get_entropy_threshold()
+    thread_id = "default"
+    messages: list[str] = []
+
+    if isinstance(env.payload, dict):
+        payload_thread_id = env.payload.get("thread_id")
+        if isinstance(payload_thread_id, str) and payload_thread_id:
+            thread_id = payload_thread_id
+
+        payload_threshold = env.payload.get("threshold")
+        if payload_threshold is not None:
+            try:
+                threshold = float(payload_threshold)
+            except (TypeError, ValueError):
+                pass
+
+        payload_messages = env.payload.get("messages")
+        if isinstance(payload_messages, list):
+            messages = [message for message in payload_messages if isinstance(message, str)]
+
+    monitor = EntropyMonitor()
+    for message in messages:
+        monitor.add_message(thread_id, message)
+
+    entropy = monitor.get_entropy(thread_id)
+    is_low = monitor.is_low_entropy(thread_id, threshold=threshold)
+    injected_context = monitor.check_and_inject(thread_id, threshold=threshold)
+    return {
+        "entropy": entropy,
+        "is_low": is_low,
+        "injected_context": injected_context,
+    }
 
 
 @intent_handler("payment")
