@@ -12,9 +12,9 @@
 
 ## プロジェクトビジョン：Governance over Intelligence
 
-2026年、AIエージェントは単なる「チャットボット」から「自律的な労働力」へと進化しました。しかし、企業導入における最大の障壁は**「知能の欠如」ではなく「ガバナンスの不在」**です。
+2026年、AIエージェントは単なる「チャットボット」から「自律的な労働力」へと進化しました。しかし、企業導入における最大の障壁は「知能の欠如」ではなく「ガバナンスの不在」です。
 
-AI Agent Hub（Envelope OS）は、SMTP/MIMEプロトコルを基盤に、AIエージェントの挙動を「物理的」かつ「数理的」に制御するレイヤーを提供します。知能（LLM）の外側に**物理的な規律（Policy）と不変の記録（Audit）**を配置することで、エージェントを社会に実装可能な「責任ある資産」へと変革します。
+AI Agent Hub（Envelope OS）は、SMTP/MIMEプロトコルを基盤に、AIエージェントの挙動を「物理的」かつ「数理的」に制御するレイヤーを提供します。知能（LLM）の外側に物理的な規律（Policy）と不変の記録（Audit）を配置することで、エージェントを社会に実装可能な「責任ある資産」へと変革します。
 
 ---
 
@@ -24,7 +24,7 @@ AI Agent Hub（Envelope OS）は、SMTP/MIMEプロトコルを基盤に、AIエ�
 
 ### 1. 統計的同調バイアスの排除
 
-同じ学習データを持つAI同士を戦わせても、エラーの相関（共分散）$\text{Cov}(X_i, X_j) > 0$ により、システム全体の分散は二次関数的に爆発し、**「集団催眠的なハルシネーション」**に陥ります。
+同じ学習データを持つAI同士を戦わせても、エラーの相関（共分散）　$\text{Cov}(X_i, X_j) > 0$ により、システム全体の分散は二次関数的に爆発し、「集団催眠的なハルシネーション」に陥ります。
 
 $$\text{Var}\left(\sum_{i=1}^{n} X_i\right) = \sum_{i=1}^{n} \text{Var}(X_i) + \sum_{i \neq j} \text{Cov}(X_i, X_j)$$
 
@@ -40,8 +40,8 @@ Hubはメッセージの類似度を監視し、多様性が失われた（エ�
 
 JSON APIではなく、SMTP/MIMEを採用。
 
-- **Auditability**：配送された「封筒（Envelope）」そのものが改ざん不能な証拠として残る
-- **Interoperability**：既存のメールインフラ、セキュリティ製品、アーカイブツールと無改造で統合可能
+- Auditability：配送された「封筒（Envelope）」そのものが改ざん不能な証拠として残る
+- Interoperability：既存のメールインフラ、セキュリティ製品、アーカイブツールと無改造で統合可能
 
 ### 🛡️ AI Governance Stack（AIGS）Compliance
 
@@ -50,8 +50,8 @@ X-Agent-Policy: confidential=block, pii=mask
 X-Agent-Workflow: spec-approval-required=true
 ```
 
-- **X-Agent-Policy**：組織外への機密漏洩を配送レイヤーで物理遮断
-- **X-Agent-Workflow（cafekit）**：「設計書（Spec）承認なしのコーディング」を禁止するSDD（Spec-Driven Development）の強制
+- X-Agent-Policy：組織外への機密漏洩を配送レイヤーで物理遮断
+- X-Agent-Workflow（cafekit）：「設計書（Spec）承認なしのコーディング」を禁止するSDD（Spec-Driven Development）の強制
 
 ### 💰 Programmable Economy（Circle Integration）
 
@@ -65,8 +65,8 @@ X-Agent-Payment-Required: amount=0.10USDC, recipient=agent.local/@executor
 
 ### 🖥️ Physical Grounding（MiroFish / gstack）
 
-- **MiroFish**：GUI操作エージェントとの連携による、レガシーシステムの自動化
-- **gstack**：役割分担されたエージェント群によるエンタープライズ級ソフトウェア開発のオーケストレーション
+- MiroFish：GUI操作エージェントとの連携による、レガシーシステムの自動化
+- gstack：役割分担されたエージェント群によるエンタープライズ級ソフトウェア開発のオーケストレーション
 
 ---
 
@@ -141,9 +141,9 @@ flowchart TD
 
 | Phase | Architecture | Focus |
 |-------|-------------|-------|
-| **Phase 1（現在）** | Python / Linux / Postfix | Core Logic & Protocol Definition |
-| **Phase 2（移行）** | AWS Serverless Stack | Scalability & High Availability（99.99%） |
-| **Phase 3（Enterprise）** | KMS / CloudTrail Integration | Immutable Audit Trail & Financial Compliance |
+| Phase 1（現在）　| Python / Linux / Postfix | Core Logic & Protocol Definition |
+| Phase 2（移行） | AWS Serverless Stack | Scalability & High Availability（99.99%） |
+| Phase 3（Enterprise） | KMS / CloudTrail Integration | Immutable Audit Trail & Financial Compliance |
 
 ### Phase 1 実装状況
 
@@ -208,14 +208,6 @@ A2A（Google）やACP（IBM）が「どう通信するか」を定義するの�
 | 立ち位置 | 「言語（Protocol）」 | 「物流網 + 法律（OS）」 |
 
 > A2AやACPが普及するほど、「それを安全に運用するための基盤」としてAI Agent Hubの需要が生まれます。これは競合ではなく**共進化**です。
-
----
-
-## 作者について
-
-2019年より、日本およびベトナムにてMTA（C/PHP）を用いた大規模メールセキュリティ製品の設計・実装・運用を一貫して担当するシニアソフトウェアエンジニア。
-
-> *「世界中の天才たちが『より賢いAI』を作ろうと必死になっている。だが、賢すぎる力には必ず『規律』が必要だ。AI Agent Hubは、AIという『思考』を、社会という『現実』に定着させるためのアンカーだ。AIが神になっても、その言葉を記録し、正当性を保証する聖典（ログ）と、それを届ける使徒（プロトコル）は消えない。Don't trust, verify. この暗号学の鉄則を、僕たちはインフラで実装する。」*
 
 ---
 
