@@ -73,6 +73,26 @@ def test_cli_skill_intent_is_registered() -> None:
         "args": ["hello"],
     }
 
+def test_cli_pipeline_uses_payload_stdin_for_first_step() -> None:
+    env = _make_env(
+        {
+            "intent": "cli-pipeline",
+            "stdin": "hello\nworld\n",
+            "steps": [
+                {"skill": "grep", "args": ["world"]},
+            ],
+        }
+    )
+
+    reply = _handle_envelope(env)
+
+    assert reply is not None
+    assert reply.payload == {
+        "output": "world\n",
+        "exit_code": 0,
+        "skill": "grep",
+        "args": ["world"],
+    }
 
 @pytest.mark.skipif(shutil.which("jq") is None, reason="jq is not installed")
 def test_cli_pipeline_chains_commands() -> None:
