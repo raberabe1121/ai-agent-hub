@@ -152,9 +152,9 @@ flowchart TD
 - ✅ Dead Letter Queue
 - ✅ `llm-query` intent（OpenAI連携）
 - ✅ EnvelopeRepository（Filesystem / SQLite）
-- 📋 Governance Milter（AIGS Compliance）
-- 📋 Circle/USDC Payment Gateway
-- 📋 Consensus Entropy Monitor
+- ✅ Governance Milter（AIGS Compliance）
+- ✅ Circle/USDC Payment Gateway
+- ✅ Consensus Entropy Monitor
 
 ---
 
