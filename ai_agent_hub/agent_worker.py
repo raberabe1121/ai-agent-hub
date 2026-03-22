@@ -21,6 +21,7 @@ from ai_agent_hub.lmtp_handler import (
     get_queue_dir,
     get_repository,
 )
+from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
 PROCESSED_DIR = Path(
@@ -209,6 +210,85 @@ def _handle_cli_pipeline(env: Envelope) -> dict:
         stdin = last_result.get("output") if isinstance(last_result.get("output"), str) else None
 
     return last_result
+
+@intent_handler("request-approval")
+def _handle_request_approval(env: Envelope) -> dict:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    description = env.payload.get("description")
+    approver = env.payload.get("approver")
+    callback_payload = env.payload.get("callback_payload")
+
+    if not isinstance(description, str) or not description:
+        return {"error": "payload.description is required"}
+    if not isinstance(approver, str) or not approver:
+        return {"error": "payload.approver is required"}
+    if not isinstance(callback_payload, dict):
+        return {"error": "payload.callback_payload must be a dict"}
+
+    request = ApprovalRequest(
+        envelope_id=env.id,
+        thread_id=env.context or env.id,
+        description=description,
+        requester=env.sender,
+        approver=approver,
+        status="pending",
+        created_at=env.created_at,
+        decided_at=None,
+        callback_payload=callback_payload,
+    )
+    ApprovalStore().create(request)
+    return {
+        "status": "pending",
+        "approval_id": request.envelope_id,
+        "message": "承認待ちです",
+    }
+
+
+@intent_handler("approve")
+def _handle_approve(env: Envelope) -> dict:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    approval_id = env.payload.get("approval_id")
+    if not isinstance(approval_id, str) or not approval_id:
+        return {"error": "payload.approval_id is required"}
+
+    approved_request = ApprovalStore().approve(approval_id)
+    callback_envelope = Envelope.new(
+        envelope_type="command",
+        sender=approved_request.approver,
+        recipient=approved_request.requester,
+        payload=approved_request.callback_payload,
+        context=approved_request.thread_id,
+        in_reply_to=approved_request.envelope_id,
+    )
+    send_envelope_via_smtp(callback_envelope)
+    return {"status": "approved", "message": "承認しました"}
+
+
+@intent_handler("reject")
+def _handle_reject(env: Envelope) -> dict:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    approval_id = env.payload.get("approval_id")
+    reason = env.payload.get("reason")
+    if not isinstance(approval_id, str) or not approval_id:
+        return {"error": "payload.approval_id is required"}
+    if not isinstance(reason, str) or not reason:
+        return {"error": "payload.reason is required"}
+
+    ApprovalStore().reject(approval_id, reason)
+    return {"status": "rejected", "reason": reason}
+
+
+@intent_handler("list-pending-approvals")
+def _handle_list_pending_approvals(_: Envelope) -> dict:
+    pending = ApprovalStore().list_pending()
+    return {"pending": [request.to_dict() for request in pending]}
+
 
 @intent_handler("payment")
 def _handle_payment(env: Envelope) -> dict:
