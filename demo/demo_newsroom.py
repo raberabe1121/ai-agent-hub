@@ -14,43 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 from ai_agent_hub import Envelope
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-DEFAULT_PROCESSED_DIR = "/opt/ai-agent-hub/processed"
-
-
-def _read_from_bashrc(name: str) -> str | None:
-    bashrc_path = Path.home() / ".bashrc"
-    if not bashrc_path.exists():
-        return None
-
-    command = (
-        f'source "{bashrc_path}" >/dev/null 2>&1; '
-        f'printf %s "${{{name}:-}}"'
-    )
-    result = subprocess.run(
-        ["bash", "-lc", command],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    value = result.stdout.strip()
-    return value or None
-
-
-def _resolve_env(name: str, default: str | None = None) -> str:
-    value = os.environ.get(name)
-    if not value:
-        value = _read_from_bashrc(name)
-    if not value:
-        value = default
-    if not value:
-        raise RuntimeError(
-            f"{name} is not set. Export it in your shell or ~/.bashrc before running this demo."
-        )
-    os.environ[name] = value
-    return value
-
-
-PROCESSED_DIR = Path(_resolve_env("AI_AGENT_HUB_PROCESSED_DIR", DEFAULT_PROCESSED_DIR))
+PROCESSED_DIR = Path(os.environ["AI_AGENT_HUB_PROCESSED_DIR"])
 
 
 def wait_for_reply(original_id: str, timeout: int = 20) -> dict | None:
@@ -84,78 +48,65 @@ def send_and_wait(payload: dict, sender: str) -> dict | None:
     return result
 
 
-def main() -> None:
-    print("=" * 60)
-    print("🗞️  AI Agent Hub - インテリジェント・ニュースルーム PoC")
-    print("=" * 60)
+print("=" * 60)
+print("🗞️  AI Agent Hub - インテリジェント・ニュースルーム PoC")
+print("=" * 60)
 
-    # ステップ1: RSS取得
-    print("\n📡 ステップ1: RSSフィードを取得中...")
-    r1 = send_and_wait(
-        payload={
-            "intent": "cli-skill",
-            "skill": "curl",
-            "args": ["-s", "--max-time", "10", "https://news.ycombinator.com/rss"],
-        },
-        sender="https://newsroom.local/@collector",
-    )
-    if not r1:
-        print("失敗。終了します。")
-        raise SystemExit(1)
+# ステップ1: RSS取得
+print("\n📡 ステップ1: RSSフィードを取得中...")
+r1 = send_and_wait(
+    payload={"intent": "cli-skill", "skill": "curl",
+             "args": ["-s", "--max-time", "10",
+                      "https://news.ycombinator.com/rss"]},
+    sender="https://newsroom.local/@collector",
+)
+if not r1:
+    print("失敗。終了します。"); exit(1)
 
-    rss = r1.get("payload", {}).get("output", "")
-    print(f"  → {len(rss)}文字取得")
+rss = r1.get("payload", {}).get("output", "")
+print(f"  → {len(rss)}文字取得")
 
-    # ステップ2: タイトル抽出
-    print("\n🔍 ステップ2: タイトルをフィルタリング中...")
-    r2 = send_and_wait(
-        payload={
-            "intent": "cli-pipeline",
-            "steps": [
-                {"skill": "grep", "args": ["-o", "<title>[^<]*</title>"]},
-                {"skill": "grep", "args": ["-v", "Hacker News"]},
-            ],
-            "stdin": rss,
-        },
-        sender="https://newsroom.local/@filter",
-    )
+# ステップ2: タイトル抽出
+print("\n🔍 ステップ2: タイトルをフィルタリング中...")
+r2 = send_and_wait(
+    payload={"intent": "cli-pipeline",
+             "steps": [
+                 {"skill": "grep", "args": ["-o", "<title>[^<]*</title>"]},
+                 {"skill": "grep", "args": ["-v", "Hacker News"]},
+             ],
+             "stdin": rss},
+    sender="https://newsroom.local/@filter",
+)
 
-    titles = []
-    if r2:
-        raw = r2.get("payload", {}).get("output", "")
-        titles = [
-            t.replace("<title>", "").replace("</title>", "").strip()
-            for t in raw.strip().split("\n")
-            if t.strip()
-        ][:5]
-        print("  → 上位5件:")
-        for i, title in enumerate(titles, 1):
-            print(f"     {i}. {title}")
+titles = []
+if r2:
+    raw = r2.get("payload", {}).get("output", "")
+    titles = [t.replace("<title>","").replace("</title>","").strip()
+              for t in raw.strip().split("\n") if t.strip()][:5]
+    print(f"  → 上位5件:")
+    for i, t in enumerate(titles, 1):
+        print(f"     {i}. {t}")
 
-    # ステップ3: Ollamaによる知的な要約
-    print("\n📝 ステップ3: AI (Gemma 3) が内容を分析して要約中...")
-    prompt_text = (
-        "以下のHacker Newsのタイトルを、日本のITエンジニア向けに要約してください。"
-        "重要な3点に絞って、簡潔な日本語でお願いします：\n\n"
-        + "\n".join(titles)
-    )
+# ステップ3: Ollamaによる知的な要約
+print("\n📝 ステップ3: AI (Gemma 3) が内容を分析して要約中...")
+prompt_text = (
+    "以下のHacker Newsのタイトルを、日本のITエンジニア向けに要約してください。"
+    "重要な3点に絞って、簡潔な日本語でお願いします：\n\n"
+    + "\n".join(titles)
+)
 
-    r3 = send_and_wait(
-        payload={
-            "intent": "llm-query",
-            "text": prompt_text,
-            "model": "gemma3:4b",
-        },
-        sender="https://newsroom.local/@summarizer",
-    )
-    if r3:
-        payload = r3.get("payload", {})
-        print(f"  → 要約: {payload.get('result') or payload.get('summary', '')}")
+r3 = send_and_wait(
+    payload={
+        "intent": "llm-query",
+        "text": prompt_text,
+        "model": "gemma3:4b",
+    },
+    sender="https://newsroom.local/@summarizer",
+)
+if r3:
+    payload = r3.get("payload", {})
+    print(f"  → 要約: {payload.get('result') or payload.get('summary', '')}")
 
-    print("\n" + "=" * 60)
-    print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()
+print("\n" + "=" * 60)
+print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
+print("=" * 60)
