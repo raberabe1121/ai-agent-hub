@@ -1,6 +1,7 @@
 """インテリジェント・ニュースルーム PoC"""
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -41,9 +42,9 @@ def send_and_wait(payload: dict, sender: str) -> dict | None:
     print(f"  → 送信ID: {env.id}")
     result = wait_for_reply(env.id)
     if result:
-        print(f"  → 返信受信: ✅")
+        print("  → 返信受信: ✅")
     else:
-        print(f"  → タイムアウト: ❌")
+        print("  → タイムアウト: ❌")
     return result
 
 
