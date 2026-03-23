@@ -9,13 +9,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-os.environ["AI_AGENT_HUB_QUEUE_DIR"] = "/opt/ai-agent-hub/queue"
-os.environ["AI_AGENT_HUB_PROCESSED_DIR"] = "/opt/ai-agent-hub/processed"
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-PROCESSED_DIR = Path("/opt/ai-agent-hub/processed")
+PROCESSED_DIR = Path(os.environ["AI_AGENT_HUB_PROCESSED_DIR"])
 
 
 def wait_for_reply(original_id: str, timeout: int = 20) -> dict | None:
@@ -88,14 +86,25 @@ if r2:
     for i, t in enumerate(titles, 1):
         print(f"     {i}. {t}")
 
-# ステップ3: 要約
-print("\n📝 ステップ3: 要約中...")
+# ステップ3: Ollamaによる知的な要約
+print("\n📝 ステップ3: AI (Gemma 3) が内容を分析して要約中...")
+prompt_text = (
+    "以下のHacker Newsのタイトルを、日本のITエンジニア向けに要約してください。"
+    "重要な3点に絞って、簡潔な日本語でお願いします：\n\n"
+    + "\n".join(titles)
+)
+
 r3 = send_and_wait(
-    payload={"intent": "summarize", "text": "\n".join(titles)},
+    payload={
+        "intent": "llm-query",
+        "text": prompt_text,
+        "model": "gemma3:4b",
+    },
     sender="https://newsroom.local/@summarizer",
 )
 if r3:
-    print(f"  → 要約: {r3.get('payload', {}).get('summary', '')}")
+    payload = r3.get("payload", {})
+    print(f"  → 要約: {payload.get('result') or payload.get('summary', '')}")
 
 print("\n" + "=" * 60)
 print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
