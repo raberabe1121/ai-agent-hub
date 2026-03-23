@@ -302,29 +302,66 @@ def _handle_payment(env: Envelope) -> dict:
 
 @intent_handler("llm-query")
 def _handle_llm_query(env: Envelope) -> dict:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return {"error": "OPENAI_API_KEY is not set"}
-
     text = None
     if isinstance(env.payload, dict):
         text = env.payload.get("text")
     if not text:
         return {"error": "payload.text is required"}
 
-    try:
-        openai = importlib.import_module("openai")
-    except ImportError:
-        return {"error": "openai package not installed"}
+    provider = os.environ.get("LLM_PROVIDER", "ollama").strip().lower()
 
-    model = "gpt-4o-mini"
+    if provider == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return {"error": "OPENAI_API_KEY is not set"}
+
+        try:
+            openai = importlib.import_module("openai")
+        except ImportError:
+            return {"error": "openai package not installed"}
+
+        model = "gpt-4o-mini"
+        if isinstance(env.payload, dict):
+            model = env.payload.get("model", model)
+
+        try:
+            client = openai.OpenAI(api_key=api_key)
+            response = client.responses.create(model=model, input=text)
+            return {"result": response.output_text}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    api_key = os.environ.get("OLLAMA_API_KEY")
+    if not api_key:
+        return {"error": "OLLAMA_API_KEY is not set"}
+
+    model = "gemma3:4b"
     if isinstance(env.payload, dict):
         model = env.payload.get("model", model)
 
     try:
-        client = openai.OpenAI(api_key=api_key)
-        response = client.responses.create(model=model, input=text)
-        return {"result": response.output_text}
+        httpx = importlib.import_module("httpx")
+    except ImportError:
+        return {"error": "httpx package not installed"}
+
+    try:
+        response = httpx.post(
+            "https://api.ollama.com/api/chat",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": text}],
+                "stream": False,
+            },
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+        message = data.get("message", {})
+        content = message.get("content")
+        if not isinstance(content, str):
+            return {"error": "Ollama response did not include message.content"}
+        return {"result": content}
     except Exception as exc:
         return {"error": str(exc)}
 
