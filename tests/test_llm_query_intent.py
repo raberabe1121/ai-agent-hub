@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -169,13 +170,91 @@ def test_llm_query_returns_error_without_ollama_api_key(
 ) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(agent_worker, "OLLAMA_CONFIG_PATH", agent_worker.Path("/tmp/does-not-exist"))
 
     reply = agent_worker._handle_envelope(
         _make_env({"intent": "llm-query", "text": "hello"})
     )
 
     assert reply is not None
-    assert reply.payload == {"error": "OLLAMA_API_KEY is not set"}
+    assert "OLLAMA_API_KEY is not set in worker process pid=" in reply.payload["error"]
+    assert "/etc/ai-agent-hub/config" in reply.payload["error"]
+
+
+def test_llm_query_uses_payload_api_key_when_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, *, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["headers"] = headers
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return {"message": {"content": "payload key answer"}}
+
+        return FakeResponse()
+
+    fake_httpx_module = SimpleNamespace(post=fake_post)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(agent_worker, "OLLAMA_CONFIG_PATH", agent_worker.Path("/tmp/does-not-exist"))
+    monkeypatch.setattr(
+        agent_worker.importlib,
+        "import_module",
+        lambda name: fake_httpx_module if name == "httpx" else None,
+    )
+
+    reply = agent_worker._handle_envelope(
+        _make_env({"intent": "llm-query", "text": "hello", "api_key": "payload-key"})
+    )
+
+    assert reply is not None
+    assert reply.payload == {"result": "payload key answer"}
+    assert captured["headers"] == {"Authorization": "Bearer payload-key"}
+
+
+def test_llm_query_uses_config_file_key_when_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    config_path = tmp_path / "config"
+    config_path.write_text("OLLAMA_API_KEY=config-file-key\n", encoding="utf-8")
+
+    def fake_post(url: str, *, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["headers"] = headers
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return {"message": {"content": "config key answer"}}
+
+        return FakeResponse()
+
+    fake_httpx_module = SimpleNamespace(post=fake_post)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(agent_worker, "OLLAMA_CONFIG_PATH", config_path)
+    monkeypatch.setattr(
+        agent_worker.importlib,
+        "import_module",
+        lambda name: fake_httpx_module if name == "httpx" else None,
+    )
+
+    reply = agent_worker._handle_envelope(
+        _make_env({"intent": "llm-query", "text": "hello from config"})
+    )
+
+    assert reply is not None
+    assert reply.payload == {"result": "config key answer"}
+    assert captured["headers"] == {"Authorization": "Bearer config-file-key"}
 
 
 def test_llm_query_returns_error_when_text_is_missing(

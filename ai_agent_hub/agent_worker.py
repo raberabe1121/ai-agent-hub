@@ -24,6 +24,50 @@ from ai_agent_hub.lmtp_handler import (
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
+WORKER_ENV_FILES = (
+    Path(".env"),
+    Path.home() / ".bashrc",
+)
+OLLAMA_CONFIG_PATH = Path("/etc/ai-agent-hub/config")
+
+
+def _iter_key_value_lines(path: Path) -> list[tuple[str, str]]:
+    if not path.exists():
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            pairs.append((key, value))
+    return pairs
+
+
+def _bootstrap_worker_environment() -> None:
+    for path in WORKER_ENV_FILES:
+        for key, value in _iter_key_value_lines(path):
+            if key not in os.environ and value:
+                os.environ[key] = value
+
+
+def _read_config_value(path: Path, key_name: str) -> str | None:
+    for key, value in _iter_key_value_lines(path):
+        if key == key_name and value:
+            return value
+    return None
+
+
+_bootstrap_worker_environment()
+
 PROCESSED_DIR = Path(
     os.environ.get("AI_AGENT_HUB_PROCESSED_DIR")
     or os.environ.get("AGENT_HUB_PROCESSED_DIR")
@@ -333,7 +377,18 @@ def _handle_llm_query(env: Envelope) -> dict:
 
     api_key = os.environ.get("OLLAMA_API_KEY")
     if not api_key:
-        return {"error": "OLLAMA_API_KEY is not set"}
+        api_key = _read_config_value(OLLAMA_CONFIG_PATH, "OLLAMA_API_KEY")
+    if not api_key and isinstance(env.payload, dict):
+        payload_api_key = env.payload.get("api_key")
+        if isinstance(payload_api_key, str) and payload_api_key.strip():
+            api_key = payload_api_key.strip()
+    if not api_key:
+        return {
+            "error": (
+                f"OLLAMA_API_KEY is not set in worker process pid={os.getpid()}; "
+                "checked os.environ['OLLAMA_API_KEY'], /etc/ai-agent-hub/config, and payload.api_key"
+            )
+        }
 
     model = "gemma3:4b"
     if isinstance(env.payload, dict):
