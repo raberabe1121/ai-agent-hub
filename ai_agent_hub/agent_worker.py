@@ -332,6 +332,10 @@ def _handle_llm_query(env: Envelope) -> dict:
             return {"error": str(exc)}
 
     api_key = os.environ.get("OLLAMA_API_KEY")
+    if not api_key and isinstance(env.payload, dict):
+        payload_api_key = env.payload.get("api_key")
+        if isinstance(payload_api_key, str) and payload_api_key.strip():
+            api_key = payload_api_key.strip()
     if not api_key:
         return {"error": "OLLAMA_API_KEY is not set"}
 

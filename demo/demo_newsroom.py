@@ -9,13 +9,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-os.environ["AI_AGENT_HUB_QUEUE_DIR"] = "/opt/ai-agent-hub/queue"
-os.environ["AI_AGENT_HUB_PROCESSED_DIR"] = "/opt/ai-agent-hub/processed"
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
-PROCESSED_DIR = Path("/opt/ai-agent-hub/processed")
+PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "/opt/ai-agent-hub/processed"))
 
 
 def wait_for_reply(original_id: str, timeout: int = 20) -> dict | None:
@@ -43,60 +41,120 @@ def send_and_wait(payload: dict, sender: str) -> dict | None:
     print(f"  → 送信ID: {env.id}")
     result = wait_for_reply(env.id)
     if result:
-        print(f"  → 返信受信: ✅")
+        print("  → 返信受信: ✅")
     else:
-        print(f"  → タイムアウト: ❌")
+        print("  → タイムアウト: ❌")
     return result
 
 
-print("=" * 60)
-print("🗞️  AI Agent Hub - インテリジェント・ニュースルーム PoC")
-print("=" * 60)
+def _extract_llm_text(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
 
-# ステップ1: RSS取得
-print("\n📡 ステップ1: RSSフィードを取得中...")
-r1 = send_and_wait(
-    payload={"intent": "cli-skill", "skill": "curl",
-             "args": ["-s", "--max-time", "10",
-                      "https://news.ycombinator.com/rss"]},
-    sender="https://newsroom.local/@collector",
-)
-if not r1:
-    print("失敗。終了します。"); exit(1)
+    for key in ("result", "summary", "response", "output", "text"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
 
-rss = r1.get("payload", {}).get("output", "")
-print(f"  → {len(rss)}文字取得")
+    message = payload.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str) and text.strip():
+                        parts.append(text.strip())
+            if parts:
+                return "\n".join(parts)
 
-# ステップ2: タイトル抽出
-print("\n🔍 ステップ2: タイトルをフィルタリング中...")
-r2 = send_and_wait(
-    payload={"intent": "cli-pipeline",
-             "steps": [
-                 {"skill": "grep", "args": ["-o", "<title>[^<]*</title>"]},
-                 {"skill": "grep", "args": ["-v", "Hacker News"]},
-             ],
-             "stdin": rss},
-    sender="https://newsroom.local/@filter",
-)
+    return ""
 
-titles = []
-if r2:
-    raw = r2.get("payload", {}).get("output", "")
-    titles = [t.replace("<title>","").replace("</title>","").strip()
-              for t in raw.strip().split("\n") if t.strip()][:5]
-    print(f"  → 上位5件:")
-    for i, t in enumerate(titles, 1):
-        print(f"     {i}. {t}")
 
-# ステップ3: 要約
-print("\n📝 ステップ3: 要約中...")
-r3 = send_and_wait(
-    payload={"intent": "summarize", "text": "\n".join(titles)},
-    sender="https://newsroom.local/@summarizer",
-)
-if r3:
-    print(f"  → 要約: {r3.get('payload', {}).get('summary', '')}")
+def main() -> None:
+    print("=" * 60)
+    print("🗞️  AI Agent Hub - インテリジェント・ニュースルーム PoC")
+    print("=" * 60)
 
-print("\n" + "=" * 60)
-print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
-print("=" * 60)
+    # ステップ1: RSS取得
+    print("\n📡 ステップ1: RSSフィードを取得中...")
+    r1 = send_and_wait(
+        payload={
+            "intent": "cli-skill",
+            "skill": "curl",
+            "args": ["-s", "--max-time", "10", "https://news.ycombinator.com/rss"],
+        },
+        sender="https://newsroom.local/@collector",
+    )
+    if not r1:
+        print("失敗。終了します。")
+        raise SystemExit(1)
+
+    rss = r1.get("payload", {}).get("output", "")
+    print(f"  → {len(rss)}文字取得")
+
+    # ステップ2: タイトル抽出
+    print("\n🔍 ステップ2: タイトルをフィルタリング中...")
+    r2 = send_and_wait(
+        payload={
+            "intent": "cli-pipeline",
+            "steps": [
+                {"skill": "grep", "args": ["-o", "<title>[^<]*</title>"]},
+                {"skill": "grep", "args": ["-v", "Hacker News"]},
+            ],
+            "stdin": rss,
+        },
+        sender="https://newsroom.local/@filter",
+    )
+
+    titles = []
+    if r2:
+        raw = r2.get("payload", {}).get("output", "")
+        titles = [
+            t.replace("<title>", "").replace("</title>", "").strip()
+            for t in raw.strip().split("\n")
+            if t.strip()
+        ][:5]
+        print("  → 上位5件:")
+        for i, title in enumerate(titles, 1):
+            print(f"     {i}. {title}")
+
+    # ステップ3: Ollamaによる知的な要約
+    print("\n📝 ステップ3: AI (Gemma 3) が内容を分析して要約中...")
+    prompt_text = (
+        "以下のHacker Newsのタイトルを、日本のITエンジニア向けに要約してください。"
+        "重要な3点に絞って、簡潔な日本語でお願いします：\n\n"
+        + "\n".join(titles)
+    )
+
+    r3 = send_and_wait(
+        payload={
+            "intent": "llm-query",
+            "text": prompt_text,
+            "model": "gemma3:4b",
+            "api_key": os.environ.get("OLLAMA_API_KEY"),
+        },
+        sender="https://newsroom.local/@summarizer",
+    )
+    if r3:
+        payload = r3.get("payload", {})
+        summary_text = _extract_llm_text(payload)
+        if summary_text:
+            print(f"  → 要約: {summary_text}")
+        else:
+            error_text = payload.get("error") if isinstance(payload, dict) else None
+            if isinstance(error_text, str) and error_text.strip():
+                print(f"  → 要約エラー: {error_text}")
+            else:
+                print(f"  → 要約: (空のレスポンス) payload={payload}")
+
+    print("\n" + "=" * 60)
+    print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
