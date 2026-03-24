@@ -48,6 +48,33 @@ def send_and_wait(payload: dict, sender: str) -> dict | None:
     return result
 
 
+def _extract_llm_text(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+
+    for key in ("result", "summary", "response", "output", "text"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    message = payload.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str) and text.strip():
+                        parts.append(text.strip())
+            if parts:
+                return "\n".join(parts)
+
+    return ""
+
+
 def main() -> None:
     print("=" * 60)
     print("🗞️  AI Agent Hub - インテリジェント・ニュースルーム PoC")
@@ -114,7 +141,15 @@ def main() -> None:
     )
     if r3:
         payload = r3.get("payload", {})
-        print(f"  → 要約: {payload.get('result') or payload.get('summary', '')}")
+        summary_text = _extract_llm_text(payload)
+        if summary_text:
+            print(f"  → 要約: {summary_text}")
+        else:
+            error_text = payload.get("error") if isinstance(payload, dict) else None
+            if isinstance(error_text, str) and error_text.strip():
+                print(f"  → 要約エラー: {error_text}")
+            else:
+                print(f"  → 要約: (空のレスポンス) payload={payload}")
 
     print("\n" + "=" * 60)
     print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
