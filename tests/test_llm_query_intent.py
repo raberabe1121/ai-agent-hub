@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -169,6 +170,7 @@ def test_llm_query_returns_error_without_ollama_api_key(
 ) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(agent_worker, "OLLAMA_CONFIG_PATH", agent_worker.Path("/tmp/does-not-exist"))
 
     reply = agent_worker._handle_envelope(
         _make_env({"intent": "llm-query", "text": "hello"})
