@@ -15,6 +15,7 @@ from ai_agent_hub import Envelope
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
 PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "/opt/ai-agent-hub/processed"))
+OLLAMA_CONFIG_PATH = Path("/etc/ai-agent-hub/config")
 
 
 def wait_for_reply(original_id: str, timeout: int = 20) -> dict | None:
@@ -75,6 +76,43 @@ def _extract_llm_text(payload: dict) -> str:
     return ""
 
 
+def _iter_key_value_lines(path: Path) -> list[tuple[str, str]]:
+    if not path.exists():
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            pairs.append((key, value))
+    return pairs
+
+
+def _resolve_ollama_api_key() -> str | None:
+    env_value = os.environ.get("OLLAMA_API_KEY")
+    if isinstance(env_value, str) and env_value.strip():
+        return env_value.strip()
+
+    for key, value in _iter_key_value_lines(Path.home() / ".bashrc"):
+        if key == "OLLAMA_API_KEY" and value:
+            return value
+
+    for key, value in _iter_key_value_lines(OLLAMA_CONFIG_PATH):
+        if key == "OLLAMA_API_KEY" and value:
+            return value
+
+    return None
+
+
 def main() -> None:
     print("=" * 60)
     print("🗞️  AI Agent Hub - インテリジェント・ニュースルーム PoC")
@@ -130,13 +168,21 @@ def main() -> None:
         "重要な3点に絞って、簡潔な日本語でお願いします：\n\n"
         + "\n".join(titles)
     )
+    ollama_api_key = _resolve_ollama_api_key()
+    if not ollama_api_key:
+        print("  → 要約エラー: OLLAMA_API_KEY が demo 実行プロセスで解決できませんでした")
+        print("    (確認元: os.environ, ~/.bashrc, /etc/ai-agent-hub/config)")
+        print("\n" + "=" * 60)
+        print("✅ デモ完了！全工程がEnvelopeとして不変ログに記録されました")
+        print("=" * 60)
+        return
 
     r3 = send_and_wait(
         payload={
             "intent": "llm-query",
             "text": prompt_text,
             "model": "gemma3:4b",
-            "api_key": os.environ.get("OLLAMA_API_KEY"),
+            "api_key": ollama_api_key,
         },
         sender="https://newsroom.local/@summarizer",
     )
