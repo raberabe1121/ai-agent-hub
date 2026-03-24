@@ -136,6 +136,7 @@ def main() -> None:
             "intent": "llm-query",
             "text": prompt_text,
             "model": "gemma3:4b",
+            "api_key": os.environ.get("OLLAMA_API_KEY"),
         },
         sender="https://newsroom.local/@summarizer",
     )
