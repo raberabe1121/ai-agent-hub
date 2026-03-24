@@ -175,7 +175,77 @@ def test_llm_query_returns_error_without_ollama_api_key(
     )
 
     assert reply is not None
-    assert reply.payload == {"error": "OLLAMA_API_KEY is not set"}
+    assert reply.payload == {"error": "OLLAMA_API_KEY is not set (checked payload and env)"}
+
+
+def test_llm_query_uses_payload_api_key_when_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, *, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["headers"] = headers
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return {"message": {"content": "payload key answer"}}
+
+        return FakeResponse()
+
+    fake_httpx_module = SimpleNamespace(post=fake_post)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(
+        agent_worker.importlib,
+        "import_module",
+        lambda name: fake_httpx_module if name == "httpx" else None,
+    )
+
+    reply = agent_worker._handle_envelope(
+        _make_env({"intent": "llm-query", "text": "hello", "api_key": "payload-key"})
+    )
+
+    assert reply is not None
+    assert reply.payload == {"result": "payload key answer"}
+    assert captured["headers"] == {"Authorization": "Bearer payload-key"}
+
+
+def test_llm_query_prefers_payload_api_key_over_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, *, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["headers"] = headers
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return {"message": {"content": "payload preferred answer"}}
+
+        return FakeResponse()
+
+    fake_httpx_module = SimpleNamespace(post=fake_post)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_API_KEY", "env-key")
+    monkeypatch.setattr(
+        agent_worker.importlib,
+        "import_module",
+        lambda name: fake_httpx_module if name == "httpx" else None,
+    )
+
+    reply = agent_worker._handle_envelope(
+        _make_env({"intent": "llm-query", "text": "hello", "api_key": "payload-key"})
+    )
+
+    assert reply is not None
+    assert reply.payload == {"result": "payload preferred answer"}
+    assert captured["headers"] == {"Authorization": "Bearer payload-key"}
 
 
 def test_llm_query_returns_error_when_text_is_missing(
