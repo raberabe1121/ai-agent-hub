@@ -1,0 +1,9 @@
+compatibility_level = 3.7
+queue_directory = /var/spool/postfix
+inet_interfaces = all
+inet_protocols = ipv4
+mydestination = localhost
+local_transport = lmtp:inet:lmtp:8024
+local_recipient_maps =
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
