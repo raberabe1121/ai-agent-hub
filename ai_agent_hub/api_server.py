@@ -135,3 +135,18 @@ def health() -> dict[str, Any]:
             "smtp_port": int(os.environ.get("SMTP_PORT", "25")),
         },
     }
+
+
+def main() -> None:
+    import uvicorn
+
+    uvicorn.run(
+        "ai_agent_hub.api_server:app",
+        host=os.environ.get("API_HOST", "0.0.0.0"),
+        port=int(os.environ.get("API_PORT", "8080")),
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    main()
