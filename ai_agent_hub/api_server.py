@@ -60,6 +60,20 @@ def _find_reply_envelope(envelope_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _envelope_to_log_item(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": data.get("id"),
+        "time": data.get("created_at"),
+        "intent": data.get("payload", {}).get("intent"),
+        "from": data.get("sender"),
+        "to": data.get("recipient"),
+        "type": data.get("envelope_type"),
+        "payload": data.get("payload"),
+        "in_reply_to": data.get("in_reply_to", data.get("inReplyTo")),
+        "context": data.get("context"),
+    }
+
+
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     payload: dict[str, Any] = {"intent": request.intent}
@@ -96,6 +110,27 @@ def get_reply(envelope_id: str, timeout_sec: int = 30) -> dict[str, Any]:
             return reply
         time.sleep(1)
     raise HTTPException(status_code=404, detail="reply not found within timeout")
+
+
+@app.get("/logs")
+def get_logs(
+    thread_id: str | None = None,
+    limit: int = 20,
+    intent: str | None = None,
+) -> dict[str, Any]:
+    files = _iter_json_files(PROCESSED_DIR)
+    sorted_files = sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+
+    logs: list[dict[str, Any]] = []
+    for file_path in sorted_files:
+        data = _load_envelope_from_file(file_path)
+        if thread_id is not None and data.get("context") != thread_id:
+            continue
+        if intent is not None and data.get("payload", {}).get("intent") != intent:
+            continue
+        logs.append(_envelope_to_log_item(data))
+
+    return {"logs": logs[:limit], "total": len(logs)}
 
 
 @app.get("/approvals/pending")
