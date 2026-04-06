@@ -124,19 +124,29 @@ def logs(thread_id: str | None, limit: int, intent_name: str | None, api_url: st
     query = {"thread_id": thread_id, "limit": limit, "intent": intent_name}
     data = _api_call("GET", f"{base}/logs", query=query)
 
-    items = data.get("items") if isinstance(data, dict) else data
+    items = []
+    if isinstance(data, dict):
+        if isinstance(data.get("logs"), list):
+            items = data["logs"]
+        elif isinstance(data.get("items"), list):
+            items = data["items"]
+    elif isinstance(data, list):
+        items = data
+
     if not isinstance(items, list) or not items:
         click.echo("ログはありません")
         return
 
     for item in items:
-        timestamp = item.get("created_at", "-")
-        intent = item.get("payload", {}).get("intent", item.get("intent", "-"))
-        sender = item.get("sender", "-")
-        recipient = item.get("recipient", "-")
-        payload = item.get("payload", {})
+        timestamp = item.get("time") or item.get("created_at") or "N/A"
+        intent = item.get("intent")
+        if intent is None and isinstance(item.get("payload"), dict):
+            intent = item["payload"].get("intent")
+        sender = item.get("from") or item.get("sender") or "unknown"
+        recipient = item.get("to") or item.get("recipient") or "unknown"
+        payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
         summary = payload.get("text") or payload.get("message") or json.dumps(payload, ensure_ascii=False)
-        click.echo(f"{timestamp} | {intent:<14} | {sender} → {recipient} | ✅ {summary}")
+        click.echo(f"{timestamp} | {(intent or '-'):<14} | {sender} → {recipient} | ✅ {summary}")
 
 
 @main.command()

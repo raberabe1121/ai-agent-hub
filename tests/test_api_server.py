@@ -50,13 +50,13 @@ def test_get_logs_returns_log_list(tmp_path, monkeypatch):
 
     env_data = {
         "id": "env-1",
-        "created_at": "2026-04-04T13:58:33Z",
-        "sender": "https://user.local/@me",
-        "recipient": "https://agent.local/@worker",
-        "envelope_type": "command",
+        "time": "2026-04-04T13:58:33Z",
+        "from": "https://user.local/@me",
+        "to": "https://agent.local/@worker",
+        "type": "email",
         "payload": {"intent": "ping", "pong": True},
         "context": "tx_9987",
-        "in_reply_to": None,
+        "inReplyTo": None,
     }
     (tmp_path / "env-1.json").write_text(json.dumps(env_data), encoding="utf-8")
 
@@ -67,6 +67,10 @@ def test_get_logs_returns_log_list(tmp_path, monkeypatch):
     assert "logs" in body
     assert body["total"] == 1
     assert body["logs"][0]["id"] == "env-1"
+    assert body["logs"][0]["time"] == "2026-04-04T13:58:33Z"
+    assert body["logs"][0]["from"] == "https://user.local/@me"
+    assert body["logs"][0]["to"] == "https://agent.local/@worker"
+    assert body["logs"][0]["type"] == "email"
     assert body["logs"][0]["intent"] == "ping"
 
 

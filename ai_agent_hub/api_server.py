@@ -61,15 +61,17 @@ def _find_reply_envelope(envelope_id: str) -> dict[str, Any] | None:
 
 
 def _envelope_to_log_item(data: dict[str, Any]) -> dict[str, Any]:
+    payload = data.get("payload")
+    intent = payload.get("intent") if isinstance(payload, dict) else None
     return {
         "id": data.get("id"),
-        "time": data.get("created_at"),
-        "intent": data.get("payload", {}).get("intent"),
-        "from": data.get("sender"),
-        "to": data.get("recipient"),
-        "type": data.get("envelope_type"),
-        "payload": data.get("payload"),
-        "in_reply_to": data.get("in_reply_to", data.get("inReplyTo")),
+        "time": data.get("time", data.get("created_at")),
+        "intent": intent,
+        "from": data.get("from", data.get("sender")),
+        "to": data.get("to", data.get("recipient")),
+        "type": data.get("type", data.get("envelope_type")),
+        "payload": payload,
+        "in_reply_to": data.get("inReplyTo", data.get("in_reply_to")),
         "context": data.get("context"),
     }
 
@@ -126,7 +128,9 @@ def get_logs(
         data = _load_envelope_from_file(file_path)
         if thread_id is not None and data.get("context") != thread_id:
             continue
-        if intent is not None and data.get("payload", {}).get("intent") != intent:
+        payload = data.get("payload")
+        payload_intent = payload.get("intent") if isinstance(payload, dict) else None
+        if intent is not None and payload_intent != intent:
             continue
         logs.append(_envelope_to_log_item(data))
 

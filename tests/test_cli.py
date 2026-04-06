@@ -101,3 +101,31 @@ def test_send_no_wait_skips_reply_poll(monkeypatch):
     assert result.exit_code == 0
     assert calls == [("POST", "http://localhost:8080/envelopes")]
     assert "env-no-wait" in result.output
+
+
+def test_logs_handles_null_fields(monkeypatch):
+    def fake_api_call(method, url, **kwargs):
+        assert method == "GET"
+        assert url.endswith("/logs")
+        return {
+            "logs": [
+                {
+                    "id": "env-1",
+                    "time": None,
+                    "intent": None,
+                    "from": None,
+                    "to": None,
+                    "type": None,
+                    "payload": {"answer": "ok"},
+                }
+            ],
+            "total": 1,
+        }
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["logs"])
+
+    assert result.exit_code == 0
+    assert "N/A" in result.output
+    assert "unknown → unknown" in result.output
