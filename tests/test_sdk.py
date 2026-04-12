@@ -198,6 +198,7 @@ def test_request_approval_sends_structured_payload(monkeypatch):
         "description": "経費申請",
         "approver": "https://company.local/@manager",
         "callback_payload": {"intent": "echo", "text": "承認されました"},
+        "text": '{"description": "経費申請", "approver": "https://company.local/@manager", "callback_payload": {"intent": "echo", "text": "承認されました"}}',
         "thread_id": "thread-1",
     }
 

@@ -75,6 +75,32 @@ def test_request_approval_creates_approval_request(approval_db: Path) -> None:
     }
 
 
+def test_request_approval_accepts_text_json_payload_fallback(approval_db: Path) -> None:
+    env = _make_env(
+        {
+            "intent": "request-approval",
+            "text": (
+                '{"description":"JSON経由の承認",'
+                '"approver":"https://company.local/@manager",'
+                '"callback_payload":{"intent":"execute-approved-task"}}'
+            ),
+        }
+    )
+
+    reply = agent_worker._handle_envelope(env)
+
+    assert reply is not None
+    assert reply.payload == {
+        "status": "pending",
+        "approval_id": env.id,
+        "message": "承認待ちです",
+    }
+
+    stored = ApprovalStore(str(approval_db)).get(env.id)
+    assert stored is not None
+    assert stored.description == "JSON経由の承認"
+
+
 def test_approve_sends_follow_up_envelope(approval_db: Path, sent_envelopes: list[Envelope]) -> None:
     request_env = _make_env(
         {

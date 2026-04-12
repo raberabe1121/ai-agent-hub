@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -241,6 +242,14 @@ class AgentHub:
             "description": description,
             "approver": approver,
             "callback_payload": callback,
+            "text": json.dumps(
+                {
+                    "description": description,
+                    "approver": approver,
+                    "callback_payload": callback,
+                },
+                ensure_ascii=False,
+            ),
         }
         if thread_id is not None:
             request_payload["thread_id"] = thread_id
