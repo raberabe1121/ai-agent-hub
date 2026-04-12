@@ -213,3 +213,32 @@ def test_approval_endpoints_use_env_db_path(monkeypatch):
 
     assert response.status_code == 200
     assert captured["db_path"] == "/tmp/shared-approvals.db"
+
+
+def test_create_approval_request_endpoint(monkeypatch):
+    created = {}
+
+    class _DummyStore:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def create(self, request):
+            created["request"] = request
+
+    monkeypatch.setattr("ai_agent_hub.api_server.ApprovalStore", _DummyStore)
+
+    response = client.post(
+        "/approvals/request",
+        json={
+            "description": "経費申請",
+            "approver": "https://company.local/@manager",
+            "callback_payload": {"intent": "echo"},
+            "thread_id": "thread-1",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["description"] == "経費申請"
+    assert created["request"].thread_id == "thread-1"

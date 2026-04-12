@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.human_in_the_loop import ApprovalStore
+from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
 
@@ -33,6 +35,14 @@ class EnvelopeRequest(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str
+
+
+class ApprovalCreateRequest(BaseModel):
+    description: str
+    approver: str
+    callback_payload: dict[str, Any]
+    thread_id: str | None = None
+    requester: str | None = None
 
 
 app = FastAPI(title="AI Agent Hub API")
@@ -169,6 +179,31 @@ def get_logs(
 def list_pending_approvals() -> list[dict[str, Any]]:
     store = _approval_store()
     return [item.to_dict() for item in store.list_pending()]
+
+
+@app.post("/approvals/request")
+def create_approval_request(request: ApprovalCreateRequest) -> dict[str, Any]:
+    store = _approval_store()
+    approval_request = ApprovalRequest(
+        envelope_id=str(uuid.uuid4()),
+        thread_id=request.thread_id or str(uuid.uuid4()),
+        description=request.description,
+        requester=request.requester or "https://user.local/@me",
+        approver=request.approver,
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        decided_at=None,
+        callback_payload=request.callback_payload,
+    )
+    store.create(approval_request)
+    return {
+        "approval_id": approval_request.envelope_id,
+        "description": approval_request.description,
+        "approver": approval_request.approver,
+        "status": approval_request.status,
+        "created_at": approval_request.created_at.isoformat(),
+        "decided_at": None,
+    }
 
 
 @app.post("/approvals/{approval_id}/approve")

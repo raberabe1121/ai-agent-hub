@@ -254,19 +254,35 @@ class AgentHub:
         if thread_id is not None:
             request_payload["thread_id"] = thread_id
 
-        result = self._send_request(body=request_payload, wait=True)
-        if result.status == "timeout":
-            raise AgentHubTimeoutError("Timed out while waiting for approval request reply")
+        try:
+            result = self._send_request(body=request_payload, wait=True)
+            if result.status == "timeout":
+                raise AgentHubTimeoutError("Timed out while waiting for approval request reply")
 
-        payload = result.payload
-        if not isinstance(payload, dict):
-            raise AgentHubError("Approval request reply payload is missing or invalid")
-        if "error" in payload:
-            raise AgentHubError(f"Approval request failed: {payload['error']}")
+            payload = result.payload
+            if not isinstance(payload, dict):
+                raise AgentHubError("Approval request reply payload is missing or invalid")
+            if "error" in payload:
+                raise AgentHubError(f"Approval request failed: {payload['error']}")
 
-        approval_id = payload.get("approval_id")
-        if not isinstance(approval_id, str) or not approval_id:
-            raise AgentHubError("Approval request reply does not contain approval_id")
+            approval_id = payload.get("approval_id")
+            if not isinstance(approval_id, str) or not approval_id:
+                raise AgentHubError("Approval request reply does not contain approval_id")
+        except AgentHubError as exc:
+            fallback_response = self._request(
+                "POST",
+                "/approvals/request",
+                json={
+                    "description": description,
+                    "approver": approver,
+                    "callback_payload": callback,
+                    "thread_id": thread_id,
+                },
+            )
+            payload = fallback_response.json()
+            approval_id = payload.get("approval_id")
+            if not isinstance(approval_id, str) or not approval_id:
+                raise exc
 
         return ApprovalEntry(
             approval_id=approval_id,

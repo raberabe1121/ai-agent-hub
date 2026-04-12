@@ -203,11 +203,40 @@ def test_request_approval_sends_structured_payload(monkeypatch):
     }
 
 
-def test_request_approval_raises_when_reply_missing_approval_id(monkeypatch):
+def test_request_approval_falls_back_to_direct_endpoint_on_worker_error(monkeypatch):
+    client = DummyClient(
+        responses=[
+            DummyResponse(200, {"envelope_id": "ap-env-1", "status": "queued"}),
+            DummyResponse(200, {"payload": {"error": "payload.description is required"}}),
+            DummyResponse(
+                200,
+                {
+                    "approval_id": "ap-fallback",
+                    "description": "経費申請",
+                    "approver": "https://company.local/@manager",
+                    "status": "pending",
+                },
+            ),
+        ]
+    )
+    hub = AgentHub(base_url="http://localhost:8080")
+    monkeypatch.setattr(hub, "_client", client)
+
+    approval = hub.request_approval(
+        description="経費申請",
+        approver="https://company.local/@manager",
+        callback={"intent": "echo"},
+    )
+
+    assert approval.approval_id == "ap-fallback"
+
+
+def test_request_approval_raises_when_both_primary_and_fallback_fail(monkeypatch):
     client = DummyClient(
         responses=[
             DummyResponse(200, {"envelope_id": "ap-env-1", "status": "queued"}),
             DummyResponse(200, {"payload": {"status": "pending"}}),
+            DummyResponse(200, {"status": "pending"}),
         ]
     )
     hub = AgentHub(base_url="http://localhost:8080")
@@ -221,7 +250,7 @@ def test_request_approval_raises_when_reply_missing_approval_id(monkeypatch):
         )
 
 
-def test_request_approval_raises_timeout(monkeypatch):
+def test_request_approval_timeout_falls_back(monkeypatch):
     hub = AgentHub(base_url="http://localhost:8080")
 
     monkeypatch.setattr(
@@ -229,10 +258,23 @@ def test_request_approval_raises_timeout(monkeypatch):
         "_send_request",
         lambda body, wait=True, timeout=30: SendResult("env-timeout", payload=None, status="timeout"),
     )
+    monkeypatch.setattr(
+        hub,
+        "_request",
+        lambda method, path, **kwargs: DummyResponse(
+            200,
+            {
+                "approval_id": "ap-from-fallback",
+                "description": "経費申請",
+                "approver": "https://company.local/@manager",
+                "status": "pending",
+            },
+        ),
+    )
 
-    with pytest.raises(AgentHubTimeoutError):
-        hub.request_approval(
-            description="経費申請",
-            approver="https://company.local/@manager",
-            callback={"intent": "echo"},
-        )
+    approval = hub.request_approval(
+        description="経費申請",
+        approver="https://company.local/@manager",
+        callback={"intent": "echo"},
+    )
+    assert approval.approval_id == "ap-from-fallback"
