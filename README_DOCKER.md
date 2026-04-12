@@ -27,6 +27,17 @@ curl -X POST http://localhost:8080/envelopes \
 curl http://localhost:8080/envelopes/{envelope_id}/reply
 ```
 
+## systemd利用時の注意（承認DBの共有）
+
+`api_server.service` と `agent_worker.service` の両方で、同じ承認DBパスを参照する必要があります。  
+どちらか片方だけに設定すると、承認作成と承認参照でDBが分かれて `404` になる場合があります。
+
+以下を両サービスに追加してください。
+
+```ini
+Environment=AI_AGENT_HUB_APPROVAL_DB=/opt/ai-agent-hub/approvals.db
+```
+
 対象ファイル：
 - docker-compose.yml（新規）
 - Dockerfile（新規）
