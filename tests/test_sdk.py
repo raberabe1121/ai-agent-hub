@@ -171,3 +171,30 @@ def test_base_url_from_environment(monkeypatch):
     hub = AgentHub()
 
     assert hub.base_url == "http://192.168.1.1:8080"
+
+
+def test_request_approval_sends_structured_payload(monkeypatch):
+    client = DummyClient(
+        responses=[
+            DummyResponse(200, {"envelope_id": "ap-env-1", "status": "queued"}),
+            DummyResponse(200, {"payload": {"approval_id": "ap-1", "status": "pending"}}),
+        ]
+    )
+    hub = AgentHub(base_url="http://localhost:8080")
+    monkeypatch.setattr(hub, "_client", client)
+
+    approval = hub.request_approval(
+        description="経費申請",
+        approver="https://company.local/@manager",
+        callback={"intent": "echo", "text": "承認されました"},
+        thread_id="thread-1",
+    )
+
+    assert approval.approval_id == "ap-1"
+    assert client.calls[0]["json"] == {
+        "intent": "request-approval",
+        "description": "経費申請",
+        "approver": "https://company.local/@manager",
+        "callback_payload": {"intent": "echo", "text": "承認されました"},
+        "thread_id": "thread-1",
+    }

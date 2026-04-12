@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from dataclasses import dataclass
@@ -132,20 +131,7 @@ class AgentHub:
 
         return response
 
-    def send(
-        self,
-        intent: str,
-        text: str | None = None,
-        model: str | None = None,
-        wait: bool = True,
-        timeout: int = 30,
-    ) -> SendResult:
-        body: dict[str, Any] = {"intent": intent}
-        if text is not None:
-            body["text"] = text
-        if model is not None:
-            body["model"] = model
-
+    def _send_request(self, body: dict[str, Any], wait: bool = True, timeout: int = 30) -> SendResult:
         response = self._request("POST", "/envelopes", json=body, timeout=timeout)
         data = response.json()
         envelope_id = data["envelope_id"]
@@ -160,6 +146,21 @@ class AgentHub:
         payload = reply.get("payload") if isinstance(reply, dict) else None
         payload_dict = payload if isinstance(payload, dict) else None
         return SendResult(envelope_id=envelope_id, payload=payload_dict, status="ok")
+
+    def send(
+        self,
+        intent: str,
+        text: str | None = None,
+        model: str | None = None,
+        wait: bool = True,
+        timeout: int = 30,
+    ) -> SendResult:
+        body: dict[str, Any] = {"intent": intent}
+        if text is not None:
+            body["text"] = text
+        if model is not None:
+            body["model"] = model
+        return self._send_request(body=body, wait=wait, timeout=timeout)
 
     def get_reply(self, envelope_id: str, timeout: int = 30) -> dict[str, Any] | None:
         deadline = time.time() + timeout
@@ -236,14 +237,15 @@ class AgentHub:
         thread_id: str | None = None,
     ) -> ApprovalEntry:
         request_payload: dict[str, Any] = {
+            "intent": "request-approval",
             "description": description,
             "approver": approver,
-            "callback": callback,
+            "callback_payload": callback,
         }
         if thread_id is not None:
             request_payload["thread_id"] = thread_id
 
-        result = self.send(intent="request-approval", text=json.dumps(request_payload), wait=True)
+        result = self._send_request(body=request_payload, wait=True)
         payload = result.payload or {}
 
         return ApprovalEntry(

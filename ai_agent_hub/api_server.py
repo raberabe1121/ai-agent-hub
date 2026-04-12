@@ -25,6 +25,10 @@ class EnvelopeRequest(BaseModel):
     text: str | None = None
     sender: str | None = None
     model: str | None = None
+    description: str | None = None
+    approver: str | None = None
+    callback_payload: dict[str, Any] | None = None
+    thread_id: str | None = None
 
 
 class RejectRequest(BaseModel):
@@ -88,6 +92,12 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         payload["text"] = request.text
     if request.model is not None:
         payload["model"] = request.model
+    if request.description is not None:
+        payload["description"] = request.description
+    if request.approver is not None:
+        payload["approver"] = request.approver
+    if request.callback_payload is not None:
+        payload["callback_payload"] = request.callback_payload
 
     sender = request.sender or "https://user.local/@me"
     env = Envelope.new(
@@ -95,6 +105,7 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         sender=sender,
         recipient="https://ai-agent.local/@worker",
         payload=payload,
+        context=request.thread_id,
     )
     send_envelope_via_smtp(env)
     return {"envelope_id": env.id, "status": "queued"}

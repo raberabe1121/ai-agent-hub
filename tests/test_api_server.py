@@ -48,6 +48,36 @@ def test_get_approvals_pending_returns_list(monkeypatch):
     assert isinstance(response.json(), list)
 
 
+def test_post_envelopes_request_approval_payload_and_thread(monkeypatch):
+    captured = {}
+
+    def _capture_env(env):
+        captured["payload"] = env.payload
+        captured["context"] = env.context
+
+    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+
+    response = client.post(
+        "/envelopes",
+        json={
+            "intent": "request-approval",
+            "description": "経費申請",
+            "approver": "https://company.local/@manager",
+            "callback_payload": {"intent": "echo", "text": "承認されました"},
+            "thread_id": "thread-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["payload"] == {
+        "intent": "request-approval",
+        "description": "経費申請",
+        "approver": "https://company.local/@manager",
+        "callback_payload": {"intent": "echo", "text": "承認されました"},
+    }
+    assert captured["context"] == "thread-1"
+
+
 def test_get_logs_returns_log_list(tmp_path, monkeypatch):
     monkeypatch.setattr(api_server, "PROCESSED_DIR", tmp_path)
 
