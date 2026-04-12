@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.human_in_the_loop import ApprovalStore
+from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
 
