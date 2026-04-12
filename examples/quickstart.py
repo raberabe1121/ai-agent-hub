@@ -27,6 +27,7 @@ try:
         description="経費申請 ¥150,000",
         approver="https://company.local/@manager",
         callback={"intent": "echo", "text": "承認されました"},
+        thread_id="quickstart-approval-thread",
     )
     print(f"承認ID: {approval.approval_id}")
 

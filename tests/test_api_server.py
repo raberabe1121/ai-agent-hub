@@ -216,23 +216,26 @@ def test_approval_endpoints_use_env_db_path(monkeypatch):
 
 
 def test_create_approval_request_endpoint(monkeypatch):
-    created = {}
-
-    class _DummyStore:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def create(self, request):
-            created["request"] = request
-
-    monkeypatch.setattr("ai_agent_hub.api_server.ApprovalStore", _DummyStore)
+    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", lambda env: None)
+    monkeypatch.setattr(
+        "ai_agent_hub.api_server._find_reply_envelope",
+        lambda envelope_id: {
+            "inReplyTo": envelope_id,
+            "payload": {
+                "approval_id": "ap-1",
+                "description": "経費申請",
+                "approver": "https://company.local/@manager",
+                "status": "pending",
+            },
+        },
+    )
 
     response = client.post(
         "/approvals/request",
         json={
             "description": "経費申請",
             "approver": "https://company.local/@manager",
-            "callback_payload": {"intent": "echo"},
+            "callback": {"intent": "echo"},
             "thread_id": "thread-1",
         },
     )
@@ -241,4 +244,4 @@ def test_create_approval_request_endpoint(monkeypatch):
     body = response.json()
     assert body["status"] == "pending"
     assert body["description"] == "経費申請"
-    assert created["request"].thread_id == "thread-1"
+    assert body["approval_id"] == "ap-1"
