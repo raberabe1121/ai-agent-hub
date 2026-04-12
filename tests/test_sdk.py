@@ -6,9 +6,11 @@ import ai_agent_hub.sdk as sdk_module
 from ai_agent_hub.sdk import (
     AgentHub,
     AgentHubConnectionError,
+    AgentHubError,
     AgentHubTimeoutError,
     ApprovalEntry,
     LogEntry,
+    SendResult,
 )
 
 
@@ -198,3 +200,38 @@ def test_request_approval_sends_structured_payload(monkeypatch):
         "callback_payload": {"intent": "echo", "text": "承認されました"},
         "thread_id": "thread-1",
     }
+
+
+def test_request_approval_raises_when_reply_missing_approval_id(monkeypatch):
+    client = DummyClient(
+        responses=[
+            DummyResponse(200, {"envelope_id": "ap-env-1", "status": "queued"}),
+            DummyResponse(200, {"payload": {"status": "pending"}}),
+        ]
+    )
+    hub = AgentHub(base_url="http://localhost:8080")
+    monkeypatch.setattr(hub, "_client", client)
+
+    with pytest.raises(AgentHubError):
+        hub.request_approval(
+            description="経費申請",
+            approver="https://company.local/@manager",
+            callback={"intent": "echo"},
+        )
+
+
+def test_request_approval_raises_timeout(monkeypatch):
+    hub = AgentHub(base_url="http://localhost:8080")
+
+    monkeypatch.setattr(
+        hub,
+        "_send_request",
+        lambda body, wait=True, timeout=30: SendResult("env-timeout", payload=None, status="timeout"),
+    )
+
+    with pytest.raises(AgentHubTimeoutError):
+        hub.request_approval(
+            description="経費申請",
+            approver="https://company.local/@manager",
+            callback={"intent": "echo"},
+        )

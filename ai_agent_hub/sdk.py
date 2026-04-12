@@ -246,10 +246,21 @@ class AgentHub:
             request_payload["thread_id"] = thread_id
 
         result = self._send_request(body=request_payload, wait=True)
-        payload = result.payload or {}
+        if result.status == "timeout":
+            raise AgentHubTimeoutError("Timed out while waiting for approval request reply")
+
+        payload = result.payload
+        if not isinstance(payload, dict):
+            raise AgentHubError("Approval request reply payload is missing or invalid")
+        if "error" in payload:
+            raise AgentHubError(f"Approval request failed: {payload['error']}")
+
+        approval_id = payload.get("approval_id")
+        if not isinstance(approval_id, str) or not approval_id:
+            raise AgentHubError("Approval request reply does not contain approval_id")
 
         return ApprovalEntry(
-            approval_id=str(payload.get("approval_id", result.envelope_id)),
+            approval_id=approval_id,
             description=str(payload.get("description", description)),
             approver=str(payload.get("approver", approver)),
             status=str(payload.get("status", "pending")),

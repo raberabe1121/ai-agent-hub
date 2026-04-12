@@ -1,6 +1,6 @@
 """AI Agent Hub Python SDK クイックスタート"""
 
-from ai_agent_hub.sdk import AgentHub
+from ai_agent_hub.sdk import AgentHub, AgentHubError
 
 hub = AgentHub()
 
@@ -22,17 +22,20 @@ for log in logs:
     print(f"{log.time} | {log.intent} | {log.payload}")
 
 # 4. 承認フロー
-approval = hub.request_approval(
-    description="経費申請 ¥150,000",
-    approver="https://company.local/@manager",
-    callback={"intent": "echo", "text": "承認されました"},
-)
-print(f"承認ID: {approval.approval_id}")
+try:
+    approval = hub.request_approval(
+        description="経費申請 ¥150,000",
+        approver="https://company.local/@manager",
+        callback={"intent": "echo", "text": "承認されました"},
+    )
+    print(f"承認ID: {approval.approval_id}")
 
-# 承認待ち確認
-pending = hub.pending_approvals()
-for p in pending:
-    print(f"[{p.approval_id[:8]}] {p.description}")
+    # 承認待ち確認
+    pending = hub.pending_approvals()
+    for p in pending:
+        print(f"[{p.approval_id[:8]}] {p.description}")
 
-# 承認
-hub.approve(approval.approval_id)
+    # 承認
+    hub.approve(approval.approval_id)
+except AgentHubError as exc:
+    print(f"承認フローでエラー: {exc}")
