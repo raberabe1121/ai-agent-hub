@@ -78,6 +78,40 @@ def test_post_envelopes_request_approval_payload_and_thread(monkeypatch):
     assert captured["context"] == "thread-1"
 
 
+def test_post_envelopes_request_approval_parses_text_json_fallback(monkeypatch):
+    captured = {}
+
+    def _capture_env(env):
+        captured["payload"] = env.payload
+
+    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+
+    response = client.post(
+        "/envelopes",
+        json={
+            "intent": "request-approval",
+            "text": (
+                '{"description":"text fallback",'
+                '"approver":"https://company.local/@manager",'
+                '"callback_payload":{"intent":"echo"}}'
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["payload"] == {
+        "intent": "request-approval",
+        "text": (
+            '{"description":"text fallback",'
+            '"approver":"https://company.local/@manager",'
+            '"callback_payload":{"intent":"echo"}}'
+        ),
+        "description": "text fallback",
+        "approver": "https://company.local/@manager",
+        "callback_payload": {"intent": "echo"},
+    }
+
+
 def test_get_logs_returns_log_list(tmp_path, monkeypatch):
     monkeypatch.setattr(api_server, "PROCESSED_DIR", tmp_path)
 

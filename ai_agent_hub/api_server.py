@@ -98,6 +98,18 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         payload["approver"] = request.approver
     if request.callback_payload is not None:
         payload["callback_payload"] = request.callback_payload
+    if request.intent == "request-approval" and isinstance(request.text, str):
+        try:
+            text_payload = json.loads(request.text)
+        except json.JSONDecodeError:
+            text_payload = None
+        if isinstance(text_payload, dict):
+            if "description" not in payload and isinstance(text_payload.get("description"), str):
+                payload["description"] = text_payload["description"]
+            if "approver" not in payload and isinstance(text_payload.get("approver"), str):
+                payload["approver"] = text_payload["approver"]
+            if "callback_payload" not in payload and isinstance(text_payload.get("callback_payload"), dict):
+                payload["callback_payload"] = text_payload["callback_payload"]
 
     sender = request.sender or "https://user.local/@me"
     env = Envelope.new(
