@@ -76,6 +76,11 @@ def _envelope_to_log_item(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _approval_store() -> ApprovalStore:
+    approval_db = os.environ.get("AI_AGENT_HUB_APPROVAL_DB")
+    return ApprovalStore(db_path=approval_db)
+
+
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     payload: dict[str, Any] = {"intent": request.intent}
@@ -139,13 +144,13 @@ def get_logs(
 
 @app.get("/approvals/pending")
 def list_pending_approvals() -> list[dict[str, Any]]:
-    store = ApprovalStore()
+    store = _approval_store()
     return [item.to_dict() for item in store.list_pending()]
 
 
 @app.post("/approvals/{approval_id}/approve")
 def approve_request(approval_id: str) -> dict[str, Any]:
-    store = ApprovalStore()
+    store = _approval_store()
     try:
         return store.approve(approval_id).to_dict()
     except ValueError as exc:
@@ -154,7 +159,7 @@ def approve_request(approval_id: str) -> dict[str, Any]:
 
 @app.post("/approvals/{approval_id}/reject")
 def reject_request(approval_id: str, request: RejectRequest) -> dict[str, Any]:
-    store = ApprovalStore()
+    store = _approval_store()
     try:
         return store.reject(approval_id, request.reason).to_dict()
     except ValueError as exc:

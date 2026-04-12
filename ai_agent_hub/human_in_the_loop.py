@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_APPROVAL_DB = "./approvals.db"
+DEFAULT_APPROVAL_DB = Path("./approvals.db")
 
 
 @dataclass
@@ -42,37 +42,40 @@ class ApprovalStore:
     """SQLite-backed storage for human approval requests."""
 
     def __init__(self, db_path: str | None = None) -> None:
-        configured_path = (
-            db_path
-            or os.environ.get("AI_AGENT_HUB_APPROVAL_DB")
-            or DEFAULT_APPROVAL_DB
-        )
-        self.db_path = Path(configured_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
+        self._configured_db_path = Path(db_path) if db_path is not None else None
+
+    def _resolve_db_path(self) -> Path:
+        if self._configured_db_path is not None:
+            return self._configured_db_path
+        configured = os.environ.get("AI_AGENT_HUB_APPROVAL_DB")
+        if configured:
+            return Path(configured)
+        return DEFAULT_APPROVAL_DB
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path)
+        db_path = self._resolve_db_path()
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(db_path)
         connection.row_factory = sqlite3.Row
+        self._initialize(connection)
         return connection
 
-    def _initialize(self) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS approval_requests (
-                    envelope_id TEXT PRIMARY KEY,
-                    thread_id TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    requester TEXT NOT NULL,
-                    approver TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    decided_at TEXT,
-                    callback_payload TEXT NOT NULL
-                )
-                """
+    def _initialize(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS approval_requests (
+                envelope_id TEXT PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                description TEXT NOT NULL,
+                requester TEXT NOT NULL,
+                approver TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                decided_at TEXT,
+                callback_payload TEXT NOT NULL
             )
+            """
+        )
 
     def create(self, request: ApprovalRequest) -> None:
         with self._connect() as connection:

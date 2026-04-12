@@ -34,6 +34,9 @@ def test_get_health_returns_ok():
 
 def test_get_approvals_pending_returns_list(monkeypatch):
     class _DummyStore:
+        def __init__(self, *args, **kwargs):
+            pass
+
         def list_pending(self):
             return []
 
@@ -127,3 +130,22 @@ def test_get_logs_filters_by_intent(tmp_path, monkeypatch):
     assert body["total"] == 2
     assert len(body["logs"]) == 2
     assert all(log["intent"] == "ping" for log in body["logs"])
+
+
+def test_approval_endpoints_use_env_db_path(monkeypatch):
+    captured: dict[str, str | None] = {}
+
+    class _DummyStore:
+        def __init__(self, db_path=None):
+            captured["db_path"] = db_path
+
+        def list_pending(self):
+            return []
+
+    monkeypatch.setenv("AI_AGENT_HUB_APPROVAL_DB", "/tmp/shared-approvals.db")
+    monkeypatch.setattr("ai_agent_hub.api_server.ApprovalStore", _DummyStore)
+
+    response = client.get("/approvals/pending")
+
+    assert response.status_code == 200
+    assert captured["db_path"] == "/tmp/shared-approvals.db"
