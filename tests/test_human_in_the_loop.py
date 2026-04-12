@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timezone
 
 import pytest
 
 from ai_agent_hub import Envelope
 import ai_agent_hub.agent_worker as agent_worker
-from ai_agent_hub.human_in_the_loop import ApprovalStore
+from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 
 
 BASE_SENDER = "https://example.com/@alice"
@@ -189,3 +190,30 @@ def test_approve_unknown_approval_id_returns_error(approval_db: Path, sent_envel
     assert reply is not None
     assert reply.payload == {"error": "approval request not found: missing-approval"}
     assert sent_envelopes == []
+
+
+def test_approval_store_reads_env_path_at_method_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ApprovalStore()
+    db_path = tmp_path / "shared-approvals.db"
+    monkeypatch.setenv("AI_AGENT_HUB_APPROVAL_DB", str(db_path))
+
+    request = ApprovalRequest(
+        envelope_id="approval-1",
+        thread_id="thread-dynamic",
+        description="env path dynamic check",
+        requester=BASE_SENDER,
+        approver=APPROVER,
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        decided_at=None,
+        callback_payload={"intent": "echo"},
+    )
+
+    store.create(request)
+    stored = store.get("approval-1")
+
+    assert stored is not None
+    assert db_path.exists()
