@@ -263,6 +263,25 @@ def _handle_request_approval(env: Envelope) -> dict:
     description = env.payload.get("description")
     approver = env.payload.get("approver")
     callback_payload = env.payload.get("callback_payload")
+    if not isinstance(callback_payload, dict):
+        callback_payload = env.payload.get("callback")
+
+    text_payload = env.payload.get("text")
+    if isinstance(text_payload, str):
+        try:
+            parsed_text_payload = json.loads(text_payload)
+        except json.JSONDecodeError:
+            parsed_text_payload = None
+        if isinstance(parsed_text_payload, dict):
+            if not isinstance(description, str) or not description:
+                description = parsed_text_payload.get("description")
+            if not isinstance(approver, str) or not approver:
+                approver = parsed_text_payload.get("approver")
+            if not isinstance(callback_payload, dict):
+                fallback_callback = parsed_text_payload.get("callback_payload")
+                if not isinstance(fallback_callback, dict):
+                    fallback_callback = parsed_text_payload.get("callback")
+                callback_payload = fallback_callback
 
     if not isinstance(description, str) or not description:
         return {"error": "payload.description is required"}
