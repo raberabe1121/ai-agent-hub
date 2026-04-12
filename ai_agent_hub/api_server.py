@@ -25,6 +25,10 @@ class EnvelopeRequest(BaseModel):
     text: str | None = None
     sender: str | None = None
     model: str | None = None
+    description: str | None = None
+    approver: str | None = None
+    callback_payload: dict[str, Any] | None = None
+    thread_id: str | None = None
 
 
 class RejectRequest(BaseModel):
@@ -76,6 +80,11 @@ def _envelope_to_log_item(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _approval_store() -> ApprovalStore:
+    approval_db = os.environ.get("AI_AGENT_HUB_APPROVAL_DB")
+    return ApprovalStore(db_path=approval_db)
+
+
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     payload: dict[str, Any] = {"intent": request.intent}
@@ -83,6 +92,24 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         payload["text"] = request.text
     if request.model is not None:
         payload["model"] = request.model
+    if request.description is not None:
+        payload["description"] = request.description
+    if request.approver is not None:
+        payload["approver"] = request.approver
+    if request.callback_payload is not None:
+        payload["callback_payload"] = request.callback_payload
+    if request.intent == "request-approval" and isinstance(request.text, str):
+        try:
+            text_payload = json.loads(request.text)
+        except json.JSONDecodeError:
+            text_payload = None
+        if isinstance(text_payload, dict):
+            if "description" not in payload and isinstance(text_payload.get("description"), str):
+                payload["description"] = text_payload["description"]
+            if "approver" not in payload and isinstance(text_payload.get("approver"), str):
+                payload["approver"] = text_payload["approver"]
+            if "callback_payload" not in payload and isinstance(text_payload.get("callback_payload"), dict):
+                payload["callback_payload"] = text_payload["callback_payload"]
 
     sender = request.sender or "https://user.local/@me"
     env = Envelope.new(
@@ -90,6 +117,7 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         sender=sender,
         recipient="https://ai-agent.local/@worker",
         payload=payload,
+        context=request.thread_id,
     )
     send_envelope_via_smtp(env)
     return {"envelope_id": env.id, "status": "queued"}
@@ -139,13 +167,13 @@ def get_logs(
 
 @app.get("/approvals/pending")
 def list_pending_approvals() -> list[dict[str, Any]]:
-    store = ApprovalStore()
+    store = _approval_store()
     return [item.to_dict() for item in store.list_pending()]
 
 
 @app.post("/approvals/{approval_id}/approve")
 def approve_request(approval_id: str) -> dict[str, Any]:
-    store = ApprovalStore()
+    store = _approval_store()
     try:
         return store.approve(approval_id).to_dict()
     except ValueError as exc:
@@ -154,7 +182,7 @@ def approve_request(approval_id: str) -> dict[str, Any]:
 
 @app.post("/approvals/{approval_id}/reject")
 def reject_request(approval_id: str, request: RejectRequest) -> dict[str, Any]:
-    store = ApprovalStore()
+    store = _approval_store()
     try:
         return store.reject(approval_id, request.reason).to_dict()
     except ValueError as exc:

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timezone
 
 import pytest
 
 from ai_agent_hub import Envelope
 import ai_agent_hub.agent_worker as agent_worker
-from ai_agent_hub.human_in_the_loop import ApprovalStore
+from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 
 
 BASE_SENDER = "https://example.com/@alice"
@@ -72,6 +73,32 @@ def test_request_approval_creates_approval_request(approval_db: Path) -> None:
         "intent": "execute-approved-task",
         "task": "経費を承認済みとしてDBに記録する",
     }
+
+
+def test_request_approval_accepts_text_json_payload_fallback(approval_db: Path) -> None:
+    env = _make_env(
+        {
+            "intent": "request-approval",
+            "text": (
+                '{"description":"JSON経由の承認",'
+                '"approver":"https://company.local/@manager",'
+                '"callback_payload":{"intent":"execute-approved-task"}}'
+            ),
+        }
+    )
+
+    reply = agent_worker._handle_envelope(env)
+
+    assert reply is not None
+    assert reply.payload == {
+        "status": "pending",
+        "approval_id": env.id,
+        "message": "承認待ちです",
+    }
+
+    stored = ApprovalStore(str(approval_db)).get(env.id)
+    assert stored is not None
+    assert stored.description == "JSON経由の承認"
 
 
 def test_approve_sends_follow_up_envelope(approval_db: Path, sent_envelopes: list[Envelope]) -> None:
@@ -189,3 +216,30 @@ def test_approve_unknown_approval_id_returns_error(approval_db: Path, sent_envel
     assert reply is not None
     assert reply.payload == {"error": "approval request not found: missing-approval"}
     assert sent_envelopes == []
+
+
+def test_approval_store_reads_env_path_at_method_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ApprovalStore()
+    db_path = tmp_path / "shared-approvals.db"
+    monkeypatch.setenv("AI_AGENT_HUB_APPROVAL_DB", str(db_path))
+
+    request = ApprovalRequest(
+        envelope_id="approval-1",
+        thread_id="thread-dynamic",
+        description="env path dynamic check",
+        requester=BASE_SENDER,
+        approver=APPROVER,
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        decided_at=None,
+        callback_payload={"intent": "echo"},
+    )
+
+    store.create(request)
+    stored = store.get("approval-1")
+
+    assert stored is not None
+    assert db_path.exists()
