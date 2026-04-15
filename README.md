@@ -1,28 +1,63 @@
-# AI Agent Hub — Envelope OS
-### v0.5 | "The SMTP for the Agentic Era."
+# AI Agent Hub
+### Governance Messaging Layer for AI Agents
+#### v0.5 | "The SMTP for the Agentic Era."
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue)](#技術アーキテクチャ)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![Version: 0.5](https://img.shields.io/badge/Version-v0.5-green)](#ロードマップ)
 
-> AI知能（Brain）と社会（Reality）を繋ぐ、エージェント専用の分散型ガバナンス・メッセージングOS。
+> AIエージェントの通信・監査・ガバナンスを担う、SMTP/MIMEベースのメッセージング基盤。
+
+---
+
+## これは何か・何でないか
+
+**AI Agent Hubは：**
+- ✅ AIエージェント間の**非同期メッセージング基盤**
+- ✅ 全通信を追跡可能なログとして残す**監査レイヤー**
+- ✅ ポリシー・承認フロー・予算制御を担う**ガバナンスレイヤー**
+- ✅ 既存のメールインフラ（Postfix）と統合可能な**配送保証レイヤー**
+
+**AI Agent Hubは以下ではありません：**
+- ❌ OSではない（プロセス管理・リソース隔離・スケジューリングは提供しない）
+- ❌ リアルタイム通信基盤ではない（WebSocket/gRPCが必要なユースケースには不向き）
+- ❌ LangChain/CrewAIの代替ではない（それらの上で動く監査・ガバナンス層）
+
+---
+
+## 誰のためのプロジェクトか
+
+**主なターゲット：エンタープライズのAI導入担当者・セキュリティ担当者**
+
+AIを業務に導入する際の最大の障壁は「知能の欠如」ではなく**「ガバナンスの不在」**です。
+
+- 「AIが勝手に何をしたか分からない」→ **監査ログで全工程を追跡可能**
+- 「AIの判断を誰が承認したか不明」→ **Human-in-the-loopで承認フローを強制**
+- 「AIが予算を超えて動いたら困る」→ **X-Agent-Cost-Centerで予算制御**
+- 「機密情報がAIを経由して外部に漏れないか」→ **X-Agent-Policyで配送レイヤーで遮断**
+
+**二次ターゲット：マルチエージェントシステムの研究者・開発者**
+
+LangGraph/AutoGen/CrewAIと組み合わせて、エージェント間通信に監査性とガバナンスを追加したい場合。
 
 ---
 
 ## 5分で動かす
+
+### systemd方式（現在推奨）
 
 ```bash
 git clone https://github.com/raberabe1121/ai-agent-os.git
 cd ai-agent-os
 pip install -e .
 
-# LMTPサーバーとWorkerをsystemdで起動（または直接）
+# 各サービスを起動
 python -m ai_agent_hub.lmtp_server &
 python -m ai_agent_hub.agent_worker &
 python -m ai_agent_hub.api_server &
 
-# CLIで確認
+# CLIで動作確認
 hub status
 hub send --intent ping
 hub send --intent llm-query --text "今日の横浜の天気は？"
@@ -35,36 +70,41 @@ AI Agent Hub ステータス
   Queue Dir:    ✅ /opt/ai-agent-hub/queue
   Processed:    ✅ /opt/ai-agent-hub/processed
 
-→ Envelope送信: 3e6abebf-9809-4560-b509-d877cad0eca9
-← 返信受信:
-   {"pong": true}
-
 → Envelope送信: e670bfe0-b0ce-4c4b-81a4-1337bbe7695d
 ← 返信受信:
-   {"result": "今日の横浜の天気は晴れ時々曇りで、最高気温は26℃..."}
+   {"result": "今日の横浜の天気は晴れ時々くもりで、最高気温は28℃..."}
 ```
 
----
+### Docker Compose（v0.6リリース予定）
 
-## プロジェクトビジョン：Governance over Intelligence
-
-2026年、AIエージェントは単なる「チャットボット」から「自律的な労働力」へと進化しました。しかし、企業導入における最大の障壁は**「知能の欠如」ではなく「ガバナンスの不在」**です。
-
-AI Agent Hub（Envelope OS）は、SMTP/MIMEプロトコルを基盤に、AIエージェントの挙動を「物理的」かつ「数理的」に制御するレイヤーを提供します。知能（LLM）の外側に**物理的な規律（Policy）と不変の記録（Audit）**を配置することで、エージェントを社会に実装可能な「責任ある資産」へと変革します。
+```bash
+git clone https://github.com/raberabe1121/ai-agent-os
+cd ai-agent-os
+cp .env.example .env  # OLLAMA_API_KEYを設定
+docker compose up -d
+```
 
 ---
 
 ## 理論的基盤：「エラーの共鳴」を断ち切る
 
-### 1. 統計的同調バイアスの排除
+> **注記：** 以下はコンセプト段階の理論的アプローチです。実験的評価・論文は未公開です。
+
+### 統計的同調バイアスの排除
 
 同じ学習データを持つAI同士を戦わせても、エラーの相関（共分散）$\text{Cov}(X_i, X_j) > 0$ により、システム全体の分散は二次関数的に爆発し、**「集団催眠的なハルシネーション」**に陥ります。
 
 $$\text{Var}\left(\sum_{i=1}^{n} X_i\right) = \sum_{i=1}^{n} \text{Var}(X_i) + \sum_{i \neq j} \text{Cov}(X_i, X_j)$$
 
-### 2. エントロピー・インジェクション
+### エントロピー・インジェクション（実験的機能）
 
-Hubはメッセージの類似度を監視し、多様性が失われた（エントロピーが低下した）瞬間に、外部の確定情報（Ground Truth）や逆説的なコンテキストを強制注入し、推論の枝を物理的に分岐させます。
+Hubはメッセージの類似度を監視し、多様性が失われた瞬間に外部コンテキストを注入して推論の枝を分岐させます。現時点では実験的な実装であり、効果の定量評価は今後の課題です。
+
+```bash
+hub send --intent entropy-check \
+  --text '{"thread_id": "tx_001", "messages": ["same", "same", "same"]}'
+# → {"entropy": 0.0, "is_low": true, "injected_context": "Consider an alternative..."}
+```
 
 ---
 
@@ -75,21 +115,20 @@ Hubはメッセージの類似度を監視し、多様性が失われた（エ�
 ```bash
 # Envelopeを送信して返信を待つ
 hub send --intent ping
-hub send --intent llm-query --text "今日の天気は？"
+hub send --intent llm-query --text "今日の天気は？" --model gemma3:4b
 hub send --intent summarize --text "長いテキスト..."
 
 # ログ・状態確認
 hub logs
 hub logs --limit 10
+hub logs --intent llm-query
 hub status
+hub intents
 
 # Human-in-the-loop
 hub pending
 hub approve <approval-id>
 hub reject <approval-id> --reason "予算超過"
-
-# intent一覧
-hub intents
 ```
 
 ### 🌐 HTTP REST API
@@ -100,11 +139,11 @@ curl -X POST http://localhost:8080/envelopes \
   -H "Content-Type: application/json" \
   -d '{"intent": "llm-query", "text": "こんにちは"}'
 
-# 返信を取得
+# 返信を取得（30秒ポーリング）
 curl http://localhost:8080/envelopes/{id}/reply
 
 # ログ確認
-curl http://localhost:8080/logs?limit=10
+curl "http://localhost:8080/logs?limit=10&intent=llm-query"
 
 # 承認管理
 curl http://localhost:8080/approvals/pending
@@ -114,21 +153,80 @@ curl -X POST http://localhost:8080/approvals/{id}/approve
 curl http://localhost:8080/health
 ```
 
-### 🐍 Python SDK（Coming Soon）
+### 🐍 Python SDK
 
 ```python
-from ai_agent_hub import AgentHub
+from ai_agent_hub.sdk import AgentHub
 
-hub = AgentHub(base_url="http://localhost:8080")
+hub = AgentHub()  # AI_AGENT_HUB_URL または http://localhost:8080
+
+# シンプルな送信
 result = hub.send(intent="llm-query", text="今日の天気は？")
-print(result.payload)
+print(result.payload)  # {"result": "晴れ時々くもり..."}
+
+# 承認フロー
+approval = hub.request_approval(
+    description="経費申請 ¥150,000",
+    approver="https://company.local/@manager",
+    callback={"intent": "echo", "text": "承認されました"},
+)
+hub.approve(approval.approval_id)
+
+# ログ確認
+logs = hub.logs(limit=5, intent="llm-query")
+for log in logs:
+    print(f"{log.time} | {log.intent} | {log.payload}")
 ```
+
+詳細は [examples/quickstart.py](examples/quickstart.py) を参照してください。
+
+---
+
+## セキュリティ・ポリシーの実例
+
+### X-Agent-Policy による機密情報遮断
+
+```python
+# 組織外への機密情報送信を配送レイヤーで遮断
+env = Envelope.new(
+    sender="https://company.local/@agent",
+    recipient="https://external.com/@partner",  # 組織外
+    payload={"text": "secret_key=abc123"},
+    headers={"X-Agent-Policy": "confidential=block"},
+)
+# → Governance Milterが配送を拒否
+# → 550 Policy violation: confidential content blocked
+```
+
+### X-Agent-Cost-Center による予算・レート制限
+
+```python
+env = Envelope.new(
+    payload={"intent": "llm-query", "text": "分析してください"},
+    headers={
+        "X-Agent-Cost-Center": "dept=engineering; budget=100USD/day; rate-limit=100/hour",
+    },
+)
+# → 予算上限超過時はDLQに移動してアラート
+```
+
+### X-Agent-Workflow による承認強制
+
+```python
+env = Envelope.new(
+    payload={"intent": "cli-skill", "skill": "gh", "args": ["pr", "create"]},
+    headers={"X-Agent-Workflow": "spec-approval-required=true"},
+)
+# → spec_approvedフラグがなければ配送を拒否
+```
+
+> **監査ログについての注記：** 現在の実装はファイルシステム・SQLiteへの追記で記録します。これは追跡可能性を提供しますが、root権限による改ざんは防げません。真の改ざん困難性にはWORMストレージ・CloudTrail等との統合が必要であり、Phase 3で対応予定です。
 
 ---
 
 ## 5つのガバナンス機能（実証済みデモ）
 
-以下は`demo_expense_approval.py`で実際に動作確認済みの機能です。
+`demo_expense_approval.py`で動作確認済みです。
 
 ### ① 横断的なエージェント管理
 
@@ -136,27 +234,23 @@ print(result.payload)
 RequestAgent → PolicyAgent → HumanApprovalAgent → ExecutionAgent
 ```
 
-4つのエージェントが連携して1つのフローを処理します。
-
 ### ② 権限・ポリシー制御
 
 ```
 X-Agent-Policy: human-approval-required=true; amount-jpy=150000
-→ 10万円超えを自動検知してガバナンスポリシーを適用
+→ 10万円超えを自動検知してポリシーを適用
 ```
 
 ### ③ 監査・因果トレース
 
 ```bash
-hub logs --thread-id expense-demo-xxx
+hub logs
 ```
 
 ```
-13:58:33 | submit-expense    | RequestAgent → PolicyAgent    | ✅ ¥150,000申請
-13:58:33 | policy-decision   | PolicyAgent → ApprovalAgent   | ✅ 人間承認必須
-13:58:33 | request-approval  | PolicyAgent → Worker          | ✅ 承認待ち
-14:44:58 | approve           | HumanAgent → Worker           | ✅ 承認
-14:44:59 | echo              | Manager → PolicyAgent         | ✅ 承認済み
+05:24:49 | submit-expense    | RequestAgent → PolicyAgent   | ✅ ¥150,000申請
+05:24:50 | request-approval  | PolicyAgent → Worker         | ✅ 承認待ち
+14:44:58 | approve           | HumanAgent → Worker          | ✅ 承認
 ```
 
 ### ④ Human-in-the-loop
@@ -165,7 +259,7 @@ hub logs --thread-id expense-demo-xxx
 hub pending
 # → 承認待ち: 1件 [7698e25a] 海外出張経費 ¥150,000
 
-hub approve 7698e25a-306f-4f10-bb61-0d9976746a75
+hub approve 7698e25a
 # → callback_payloadが自動実行されました
 ```
 
@@ -178,44 +272,43 @@ Postfixがキューを保持するため、システムダウン中もメッセ�
 
 ---
 
-## 主要機能：2026 Standard
+## エコシステム連携
 
-### 📩 MIME-Based Agent Messaging
-
-JSON APIではなく、SMTP/MIMEを採用。
-
-- **Auditability**：配送された「封筒（Envelope）」そのものが改ざん不能な証拠として残る
-- **Interoperability**：既存のメールインフラと無改造で統合可能
-
-### 🛡️ AI Governance Stack（AIGS）Compliance
-
-```
-X-Agent-Policy: confidential=block, pii=mask
-X-Agent-Workflow: spec-approval-required=true
-X-Agent-Cost-Center: dept=engineering, budget=100USD/day
-```
-
-### 💰 Programmable Economy（Circle Integration）
-
-```
-X-Agent-Payment-Required: amount=0.10USDC, recipient=agent.local/@executor
-```
-
-メール1通で「業務依頼・決済・領収書発行」を完結させます。
-
-### 🧠 Consensus Entropy Monitor
+### LangGraph との連携
 
 ```python
-hub send --intent entropy-check \
-  --text '{"thread_id": "tx_001", "messages": ["same", "same", "same"]}'
-# → {"entropy": 0.0, "is_low": true, "injected_context": "Consider an alternative..."}
+from langgraph.graph import StateGraph
+import httpx
+
+def envelope_node(state):
+    r = httpx.post(
+        "http://localhost:8080/envelopes",
+        json={"intent": "llm-query", "text": state["input"]},
+    )
+    envelope_id = r.json()["envelope_id"]
+    reply = httpx.get(f"http://localhost:8080/envelopes/{envelope_id}/reply")
+    return {"output": reply.json()["payload"]["result"]}
+
+graph = StateGraph(dict)
+graph.add_node("governed_analysis", envelope_node)
 ```
 
-### 🔧 CLI Skills
+### CrewAI との連携
 
-```bash
-hub send --intent cli-skill --text '{"skill": "curl", "args": ["-s", "https://..."]}'
-hub send --intent cli-pipeline --text '{"steps": [{"skill": "grep", ...}, {"skill": "jq", ...}]}'
+```python
+from crewai.tools import tool
+import httpx
+
+@tool("envelope_hub_tool")
+def send_to_hub(intent: str, text: str) -> str:
+    """ガバナンス付きでAI Agent Hubにタスクを送信する"""
+    r = httpx.post(
+        "http://localhost:8080/envelopes",
+        json={"intent": intent, "text": text},
+    )
+    envelope_id = r.json()["envelope_id"]
+    reply = httpx.get(f"http://localhost:8080/envelopes/{envelope_id}/reply")
+    return str(reply.json()["payload"])
 ```
 
 ---
@@ -227,16 +320,17 @@ flowchart TD
     subgraph Interface["🖥️ Developer Interface"]
         CLI["hub CLI"]
         API["HTTP REST API :8080"]
-        SDK["Python SDK (coming soon)"]
+        SDK["Python SDK"]
+        ECO["LangGraph / AutoGen / CrewAI"]
     end
 
     subgraph MTA["📬 MTA Layer (Postfix)"]
         SMTP["SMTP :25"]
-        PF["Postfix Router + Governance Milter"]
-        LMTP["LMTP Server :8024 asyncio"]
+        PF["Postfix Router\n+ Governance Milter"]
+        LMTP["LMTP Server :8024"]
     end
 
-    subgraph Kernel["⚙️ Envelope OS Kernel"]
+    subgraph Hub["⚙️ Governance Layer"]
         ENV["Envelope Model"]
         REPO["EnvelopeRepository\nFilesystem / SQLite"]
         WORKER["Agent Worker\nIntent Dispatcher"]
@@ -245,45 +339,24 @@ flowchart TD
     end
 
     subgraph LLM["🧠 LLM Layer"]
-        OLLAMA["Ollama Cloud\n(gemma3:4b等)"]
-        OPENAI["OpenAI API\n(gpt-4o-mini)"]
+        OLLAMA["Ollama Cloud"]
+        OPENAI["OpenAI API"]
     end
 
     CLI --> API
     SDK --> API
+    ECO --> API
     API -->|SMTP| SMTP
     SMTP --> PF
     PF -->|LMTP| LMTP
     LMTP --> ENV
     ENV --> REPO
     REPO --> WORKER
-    WORKER -->|llm-query| OLLAMA
-    WORKER -->|llm-query| OPENAI
+    WORKER --> OLLAMA
+    WORKER --> OPENAI
     WORKER -->|失敗時| DLQ
     WORKER -->|承認待ち| HITL
     WORKER -->|Reply| SMTP
-```
-
----
-
-## Envelope Model
-
-```json
-{
-  "id": "uuid-v4",
-  "from": "https://company.local/@policy-agent",
-  "to": "https://agent.local/@worker",
-  "type": "command",
-  "payload": {
-    "intent": "request-approval",
-    "description": "海外出張経費 ¥150,000の承認申請",
-    "approver": "https://company.local/@manager"
-  },
-  "context": "expense-thread-001",
-  "inReplyTo": null,
-  "time": "2026-04-06T05:24:50Z",
-  "version": "v0.1"
-}
 ```
 
 ---
@@ -295,39 +368,31 @@ flowchart TD
 | Ollama Cloud（デフォルト） | `LLM_PROVIDER=ollama` | `gemma3:4b`, `ministral-3:3b` |
 | OpenAI | `LLM_PROVIDER=openai` | `gpt-4o-mini` |
 
-```bash
-export LLM_PROVIDER=ollama
-export OLLAMA_API_KEY=your_key
-hub send --intent llm-query --text "こんにちは" --model gemma3:4b
-```
-
 ---
 
 ## ロードマップ
 
-| Phase | Architecture | Focus | 状態 |
-|-------|-------------|-------|------|
-| **Phase 1（現在）** | Python / Linux / Postfix | Core Logic & Protocol | ✅ 完了 |
-| **Phase 2（移行）** | AWS Serverless Stack | Scalability & HA（99.99%） | 📋 計画中 |
-| **Phase 3（Enterprise）** | KMS / CloudTrail Integration | Immutable Audit & Compliance | 🔭 将来 |
+| バージョン | 主な機能 | 状態 |
+|-----------|---------|------|
+| **v0.5（現在）** | CLI・REST API・Python SDK・Ollama連携・Human-in-the-loop | ✅ |
+| **v0.6** | Docker Compose・SDK APIリファレンス整備 | 📋 次期 |
+| **v0.7** | LangGraph / AutoGen / CrewAI ブリッジ正式対応 | 📋 計画中 |
+| **v1.0** | AWS Serverless・KMS/CloudTrail統合・Enterprise対応 | 🔭 将来 |
 
 ### Phase 1 実装済み機能
 
-- ✅ LMTP Server（asyncio）
-- ✅ Envelope Model + Agent Worker
-- ✅ Dead Letter Queue + リトライ
+- ✅ LMTP Server（asyncio）・Envelope Model・Agent Worker
+- ✅ Dead Letter Queue・リトライ・長期状態管理
 - ✅ `llm-query` intent（Ollama Cloud / OpenAI）
 - ✅ EnvelopeRepository（Filesystem / SQLite）
-- ✅ Governance Milter（AIGS Compliance）
+- ✅ Governance Milter（X-Agent-Policy / X-Agent-Cost-Center）
 - ✅ Circle/USDC Payment Gateway（dryrun）
-- ✅ Consensus Entropy Monitor
+- ✅ Consensus Entropy Monitor（実験的）
 - ✅ CLI Skills（curl / grep / jq / gh）
 - ✅ Human-in-the-Loop（承認フロー）
 - ✅ HTTP REST API（FastAPI）
 - ✅ CLIツール（`hub`コマンド）
-- 📋 Python SDK
-- 📋 Docker Compose
-- 📋 LangChain / CrewAI ブリッジ
+- ✅ Python SDK（`AgentHub`クラス）
 
 ---
 
@@ -335,7 +400,7 @@ hub send --intent llm-query --text "こんにちは" --model gemma3:4b
 
 2019年より、日本およびベトナムにてMTA（C/PHP）を用いた大規模メールセキュリティ製品の設計・実装・運用を一貫して担当するシニアソフトウェアエンジニア。
 
-> *「盤石な技術を最新のパラダイムで再定義する。知能（LLM）の外側に、物理的な規律と不変の記録を置く。」*
+> *「枯れた技術を最新のパラダイムで再定義する。知能（LLM）の外側に、物理的な規律と追跡可能な記録を置く。」*
 
 ---
 
