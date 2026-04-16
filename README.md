@@ -180,6 +180,8 @@ for log in logs:
 
 詳細は [examples/quickstart.py](examples/quickstart.py) を参照してください。
 
+API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](docs/python-sdk-api-reference.md) を参照してください。
+
 ---
 
 ## セキュリティ・ポリシーの実例
