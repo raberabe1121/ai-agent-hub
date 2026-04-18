@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
@@ -23,6 +23,8 @@ PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed")
 
 
 class EnvelopeRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     intent: str
     text: str | None = None
     sender: str | None = None
@@ -114,17 +116,9 @@ def _approval_store() -> ApprovalStore:
 
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
-    payload: dict[str, Any] = {"intent": request.intent}
-    if request.text is not None:
-        payload["text"] = request.text
-    if request.model is not None:
-        payload["model"] = request.model
-    if request.description is not None:
-        payload["description"] = request.description
-    if request.approver is not None:
-        payload["approver"] = request.approver
-    if request.callback_payload is not None:
-        payload["callback_payload"] = request.callback_payload
+    payload = request.model_dump(exclude_none=True)
+    payload.pop("sender", None)
+    payload.pop("thread_id", None)
     if request.intent == "request-approval" and isinstance(request.text, str):
         try:
             text_payload = json.loads(request.text)
