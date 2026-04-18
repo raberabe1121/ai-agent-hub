@@ -24,6 +24,32 @@ def test_post_envelopes_returns_envelope_id(monkeypatch):
     assert body["status"] == "queued"
 
 
+def test_post_envelopes_preserves_helper_fields_for_worker(monkeypatch):
+    captured = {}
+
+    def _capture_env(env):
+        captured["payload"] = env.payload
+
+    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+
+    response = client.post(
+        "/envelopes",
+        json={
+            "intent": "cli-skill",
+            "skill": "echo",
+            "args": ["hello"],
+            "stdin": "input-data",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["payload"] == {
+        "intent": "cli-skill",
+        "skill": "echo",
+        "args": ["hello"],
+        "stdin": "input-data",
+    }
+
 def test_get_health_returns_ok():
     response = client.get("/health")
 
