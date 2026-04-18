@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pytest
 
 import ai_agent_hub.sdk as sdk_module
@@ -103,6 +104,70 @@ def test_logs_returns_log_entries(monkeypatch):
     assert entries[0].sender == "https://user.local/@me"
 
 
+def test_query_llm_calls_send_with_llm_query(monkeypatch):
+    hub = AgentHub(base_url="http://localhost:8080")
+    captured = {}
+    expected = SendResult(envelope_id="env-llm", payload={"ok": True}, status="ok")
+
+    def _fake_send(intent, text=None, model=None, wait=True, timeout=30):
+        captured.update(
+            {"intent": intent, "text": text, "model": model, "wait": wait, "timeout": timeout}
+        )
+        return expected
+
+    monkeypatch.setattr(hub, "send", _fake_send)
+
+    result = hub.query_llm(prompt="こんにちは", model="gemma3:4b", timeout=42)
+
+    assert result is expected
+    assert captured == {
+        "intent": "llm-query",
+        "text": "こんにちは",
+        "model": "gemma3:4b",
+        "wait": True,
+        "timeout": 42,
+    }
+
+
+def test_run_cli_skill_passes_json_payload(monkeypatch):
+    hub = AgentHub(base_url="http://localhost:8080")
+    captured = {}
+    expected = SendResult(envelope_id="env-cli", payload={"ok": True}, status="ok")
+
+    def _fake_send(intent, text=None, model=None, wait=True, timeout=30):
+        captured.update({"intent": intent, "text": text, "timeout": timeout})
+        return expected
+
+    monkeypatch.setattr(hub, "send", _fake_send)
+
+    result = hub.run_cli_skill(skill="echo", args=["hello"], stdin="input", timeout=9)
+
+    assert result is expected
+    assert captured["intent"] == "cli-skill"
+    assert json.loads(captured["text"]) == {"skill": "echo", "args": ["hello"], "stdin": "input"}
+    assert captured["timeout"] == 9
+
+
+def test_run_cli_pipeline_passes_json_payload(monkeypatch):
+    hub = AgentHub(base_url="http://localhost:8080")
+    captured = {}
+    expected = SendResult(envelope_id="env-pipe", payload={"ok": True}, status="ok")
+
+    def _fake_send(intent, text=None, model=None, wait=True, timeout=30):
+        captured.update({"intent": intent, "text": text, "timeout": timeout})
+        return expected
+
+    monkeypatch.setattr(hub, "send", _fake_send)
+
+    steps = [{"cmd": "cat"}, {"cmd": "wc", "args": ["-l"]}]
+    result = hub.run_cli_pipeline(steps=steps, timeout=11)
+
+    assert result is expected
+    assert captured["intent"] == "cli-pipeline"
+    assert json.loads(captured["text"]) == {"steps": steps}
+    assert captured["timeout"] == 11
+
+
 def test_pending_approvals_returns_entries(monkeypatch):
     client = DummyClient(
         responses=[
@@ -173,6 +238,31 @@ def test_base_url_from_environment(monkeypatch):
     hub = AgentHub()
 
     assert hub.base_url == "http://192.168.1.1:8080"
+
+
+def test_api_key_sets_authorization_header(monkeypatch):
+    captured = {}
+
+    class _CaptureClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(sdk_module.httpx, "Client", _CaptureClient)
+    monkeypatch.setenv("AI_AGENT_HUB_API_KEY", "env-token")
+
+    AgentHub(base_url="http://localhost:8080")
+
+    assert captured["headers"]["Authorization"] == "Bearer env-token"
+
+
+def test_logs_passes_offset_param(monkeypatch):
+    client = DummyClient(responses=[DummyResponse(200, {"logs": []})])
+    hub = AgentHub(base_url="http://localhost:8080")
+    monkeypatch.setattr(hub, "_client", client)
+
+    hub.logs(limit=20, offset=10)
+
+    assert client.calls[0]["params"]["offset"] == 10
 
 
 def test_request_approval_sends_structured_payload(monkeypatch):

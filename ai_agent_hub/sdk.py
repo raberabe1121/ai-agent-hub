@@ -93,9 +93,20 @@ class ApprovalEntry:
 class AgentHub:
     """Client for AI Agent Hub REST API."""
 
-    def __init__(self, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.base_url = (base_url or os.environ.get("AI_AGENT_HUB_URL") or "http://localhost:8080").rstrip("/")
-        self._client = httpx.Client(base_url=self.base_url)
+        resolved_api_key = api_key or os.environ.get("AI_AGENT_HUB_API_KEY")
+        default_headers: dict[str, str] = {}
+        if resolved_api_key:
+            default_headers["Authorization"] = f"Bearer {resolved_api_key}"
+        if headers:
+            default_headers.update(headers)
+        self._client = httpx.Client(base_url=self.base_url, headers=default_headers or None)
 
     def _request(
         self,
@@ -161,6 +172,96 @@ class AgentHub:
             body["model"] = model
         return self._send_request(body=body, wait=wait, timeout=timeout)
 
+    def query_llm(
+        self,
+        prompt: str,
+        model: str = "gemma3:4b",
+        timeout: int = 60,
+    ) -> SendResult:
+        """LLMに質問する専用メソッド"""
+        return self.send(intent="llm-query", text=prompt, model=model, timeout=timeout)
+
+    def run_cli_skill(
+        self,
+        skill: str,
+        args: list[str],
+        stdin: str | None = None,
+        timeout: int = 30,
+    ) -> SendResult:
+        """CLIスキルを実行する専用メソッド"""
+        import json
+
+        payload: dict[str, Any] = {"skill": skill, "args": args}
+        if stdin is not None:
+            payload["stdin"] = stdin
+        return self.send(
+            intent="cli-skill",
+            text=json.dumps(payload),
+            timeout=timeout,
+        )
+
+    def run_cli_pipeline(
+        self,
+        steps: list[dict],
+        stdin: str | None = None,
+        timeout: int = 30,
+    ) -> SendResult:
+        """複数CLIコマンドをパイプラインで実行する専用メソッド"""
+        import json
+
+        payload: dict[str, Any] = {"steps": steps}
+        if stdin is not None:
+            payload["stdin"] = stdin
+        return self.send(
+            intent="cli-pipeline",
+            text=json.dumps(payload),
+            timeout=timeout,
+        )
+
+    def request_payment(
+        self,
+        amount: str,
+        recipient: str,
+        description: str = "",
+        timeout: int = 30,
+    ) -> SendResult:
+        """USDC決済を実行する専用メソッド"""
+        import json
+
+        return self.send(
+            intent="payment",
+            text=json.dumps(
+                {
+                    "amount": amount,
+                    "recipient": recipient,
+                    "description": description,
+                }
+            ),
+            timeout=timeout,
+        )
+
+    def check_entropy(
+        self,
+        thread_id: str,
+        messages: list[str],
+        threshold: float = 0.3,
+        timeout: int = 30,
+    ) -> SendResult:
+        """エントロピーを計算する専用メソッド"""
+        import json
+
+        return self.send(
+            intent="entropy-check",
+            text=json.dumps(
+                {
+                    "thread_id": thread_id,
+                    "messages": messages,
+                    "threshold": threshold,
+                }
+            ),
+            timeout=timeout,
+        )
+
     def get_reply(self, envelope_id: str, timeout: int = 30) -> dict[str, Any] | None:
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -178,12 +279,24 @@ class AgentHub:
 
         return None
 
-    def logs(self, limit: int = 20, intent: str | None = None, thread_id: str | None = None) -> list[LogEntry]:
-        params: dict[str, Any] = {"limit": limit}
+    def logs(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        intent: str | None = None,
+        thread_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> list[LogEntry]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         if intent is not None:
             params["intent"] = intent
         if thread_id is not None:
             params["thread_id"] = thread_id
+        if since is not None:
+            params["since"] = since
+        if until is not None:
+            params["until"] = until
 
         response = self._request("GET", "/logs", params=params)
         items = response.json().get("logs", [])

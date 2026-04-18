@@ -196,6 +196,59 @@ def test_get_logs_filters_by_intent(tmp_path, monkeypatch):
     assert all(log["intent"] == "ping" for log in body["logs"])
 
 
+def test_get_logs_honors_offset(tmp_path, monkeypatch):
+    monkeypatch.setattr(api_server, "PROCESSED_DIR", tmp_path)
+
+    for i in range(3):
+        env_data = {
+            "id": f"env-{i}",
+            "created_at": f"2026-04-04T13:58:{i:02d}Z",
+            "sender": "https://user.local/@me",
+            "recipient": "https://agent.local/@worker",
+            "envelope_type": "command",
+            "payload": {"intent": "echo", "index": i},
+            "context": "tx-offset",
+            "in_reply_to": None,
+        }
+        (tmp_path / f"env-{i}.json").write_text(json.dumps(env_data), encoding="utf-8")
+
+    response = client.get("/logs?limit=1&offset=1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert len(body["logs"]) == 1
+
+
+def test_get_logs_filters_by_since_until(tmp_path, monkeypatch):
+    monkeypatch.setattr(api_server, "PROCESSED_DIR", tmp_path)
+
+    entries = [
+        ("env-old", "2026-04-04T10:00:00Z"),
+        ("env-mid", "2026-04-04T11:00:00Z"),
+        ("env-new", "2026-04-04T12:00:00Z"),
+    ]
+    for env_id, created_at in entries:
+        env_data = {
+            "id": env_id,
+            "created_at": created_at,
+            "sender": "https://user.local/@me",
+            "recipient": "https://agent.local/@worker",
+            "envelope_type": "command",
+            "payload": {"intent": "echo"},
+            "context": "tx-time",
+            "in_reply_to": None,
+        }
+        (tmp_path / f"{env_id}.json").write_text(json.dumps(env_data), encoding="utf-8")
+
+    response = client.get("/logs?since=2026-04-04T10:30:00Z&until=2026-04-04T11:30:00Z")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["logs"][0]["id"] == "env-mid"
+
+
 def test_approval_endpoints_use_env_db_path(monkeypatch):
     captured: dict[str, str | None] = {}
 
