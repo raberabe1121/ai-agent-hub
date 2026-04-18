@@ -189,16 +189,10 @@ class AgentHub:
         timeout: int = 30,
     ) -> SendResult:
         """CLIスキルを実行する専用メソッド"""
-        import json
-
-        payload: dict[str, Any] = {"skill": skill, "args": args}
+        body: dict[str, Any] = {"intent": "cli-skill", "skill": skill, "args": args}
         if stdin is not None:
-            payload["stdin"] = stdin
-        return self.send(
-            intent="cli-skill",
-            text=json.dumps(payload),
-            timeout=timeout,
-        )
+            body["stdin"] = stdin
+        return self._send_request(body=body, timeout=timeout)
 
     def run_cli_pipeline(
         self,
@@ -207,16 +201,10 @@ class AgentHub:
         timeout: int = 30,
     ) -> SendResult:
         """複数CLIコマンドをパイプラインで実行する専用メソッド"""
-        import json
-
-        payload: dict[str, Any] = {"steps": steps}
+        body: dict[str, Any] = {"intent": "cli-pipeline", "steps": steps}
         if stdin is not None:
-            payload["stdin"] = stdin
-        return self.send(
-            intent="cli-pipeline",
-            text=json.dumps(payload),
-            timeout=timeout,
-        )
+            body["stdin"] = stdin
+        return self._send_request(body=body, timeout=timeout)
 
     def request_payment(
         self,
@@ -226,17 +214,13 @@ class AgentHub:
         timeout: int = 30,
     ) -> SendResult:
         """USDC決済を実行する専用メソッド"""
-        import json
-
-        return self.send(
-            intent="payment",
-            text=json.dumps(
-                {
-                    "amount": amount,
-                    "recipient": recipient,
-                    "description": description,
-                }
-            ),
+        return self._send_request(
+            body={
+                "intent": "payment",
+                "amount": amount,
+                "recipient": recipient,
+                "description": description,
+            },
             timeout=timeout,
         )
 
@@ -248,17 +232,13 @@ class AgentHub:
         timeout: int = 30,
     ) -> SendResult:
         """エントロピーを計算する専用メソッド"""
-        import json
-
-        return self.send(
-            intent="entropy-check",
-            text=json.dumps(
-                {
-                    "thread_id": thread_id,
-                    "messages": messages,
-                    "threshold": threshold,
-                }
-            ),
+        return self._send_request(
+            body={
+                "intent": "entropy-check",
+                "thread_id": thread_id,
+                "messages": messages,
+                "threshold": threshold,
+            },
             timeout=timeout,
         )
 

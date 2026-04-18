@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import pytest
 
 import ai_agent_hub.sdk as sdk_module
@@ -129,43 +128,101 @@ def test_query_llm_calls_send_with_llm_query(monkeypatch):
     }
 
 
-def test_run_cli_skill_passes_json_payload(monkeypatch):
+def test_run_cli_skill_sends_structured_payload(monkeypatch):
     hub = AgentHub(base_url="http://localhost:8080")
     captured = {}
     expected = SendResult(envelope_id="env-cli", payload={"ok": True}, status="ok")
 
-    def _fake_send(intent, text=None, model=None, wait=True, timeout=30):
-        captured.update({"intent": intent, "text": text, "timeout": timeout})
+    def _fake_send_request(body, wait=True, timeout=30):
+        captured.update({"body": body, "wait": wait, "timeout": timeout})
         return expected
 
-    monkeypatch.setattr(hub, "send", _fake_send)
+    monkeypatch.setattr(hub, "_send_request", _fake_send_request)
 
     result = hub.run_cli_skill(skill="echo", args=["hello"], stdin="input", timeout=9)
 
     assert result is expected
-    assert captured["intent"] == "cli-skill"
-    assert json.loads(captured["text"]) == {"skill": "echo", "args": ["hello"], "stdin": "input"}
+    assert captured["body"] == {
+        "intent": "cli-skill",
+        "skill": "echo",
+        "args": ["hello"],
+        "stdin": "input",
+    }
+    assert captured["wait"] is True
     assert captured["timeout"] == 9
 
 
-def test_run_cli_pipeline_passes_json_payload(monkeypatch):
+def test_run_cli_pipeline_sends_structured_payload(monkeypatch):
     hub = AgentHub(base_url="http://localhost:8080")
     captured = {}
     expected = SendResult(envelope_id="env-pipe", payload={"ok": True}, status="ok")
 
-    def _fake_send(intent, text=None, model=None, wait=True, timeout=30):
-        captured.update({"intent": intent, "text": text, "timeout": timeout})
+    def _fake_send_request(body, wait=True, timeout=30):
+        captured.update({"body": body, "wait": wait, "timeout": timeout})
         return expected
 
-    monkeypatch.setattr(hub, "send", _fake_send)
+    monkeypatch.setattr(hub, "_send_request", _fake_send_request)
 
     steps = [{"cmd": "cat"}, {"cmd": "wc", "args": ["-l"]}]
     result = hub.run_cli_pipeline(steps=steps, timeout=11)
 
     assert result is expected
-    assert captured["intent"] == "cli-pipeline"
-    assert json.loads(captured["text"]) == {"steps": steps}
+    assert captured["body"] == {"intent": "cli-pipeline", "steps": steps}
+    assert captured["wait"] is True
     assert captured["timeout"] == 11
+
+
+def test_request_payment_sends_structured_payload(monkeypatch):
+    hub = AgentHub(base_url="http://localhost:8080")
+    captured = {}
+    expected = SendResult(envelope_id="env-pay", payload={"ok": True}, status="ok")
+
+    def _fake_send_request(body, wait=True, timeout=30):
+        captured.update({"body": body, "wait": wait, "timeout": timeout})
+        return expected
+
+    monkeypatch.setattr(hub, "_send_request", _fake_send_request)
+
+    result = hub.request_payment(amount="12.34", recipient="@merchant", description="Lunch", timeout=13)
+
+    assert result is expected
+    assert captured["body"] == {
+        "intent": "payment",
+        "amount": "12.34",
+        "recipient": "@merchant",
+        "description": "Lunch",
+    }
+    assert captured["wait"] is True
+    assert captured["timeout"] == 13
+
+
+def test_check_entropy_sends_structured_payload(monkeypatch):
+    hub = AgentHub(base_url="http://localhost:8080")
+    captured = {}
+    expected = SendResult(envelope_id="env-ent", payload={"ok": True}, status="ok")
+
+    def _fake_send_request(body, wait=True, timeout=30):
+        captured.update({"body": body, "wait": wait, "timeout": timeout})
+        return expected
+
+    monkeypatch.setattr(hub, "_send_request", _fake_send_request)
+
+    result = hub.check_entropy(
+        thread_id="thread-1",
+        messages=["a", "b"],
+        threshold=0.4,
+        timeout=15,
+    )
+
+    assert result is expected
+    assert captured["body"] == {
+        "intent": "entropy-check",
+        "thread_id": "thread-1",
+        "messages": ["a", "b"],
+        "threshold": 0.4,
+    }
+    assert captured["wait"] is True
+    assert captured["timeout"] == 15
 
 
 def test_pending_approvals_returns_entries(monkeypatch):
