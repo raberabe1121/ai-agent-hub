@@ -89,6 +89,24 @@ def _envelope_to_log_item(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _parse_iso8601(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(normalized)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _parse_log_time(data: dict[str, Any]) -> datetime | None:
+    raw = data.get("time", data.get("created_at"))
+    if not isinstance(raw, str):
+        return None
+    try:
+        return _parse_iso8601(raw)
+    except ValueError:
+        return None
+
+
 def _approval_store() -> ApprovalStore:
     approval_db = os.environ.get("AI_AGENT_HUB_APPROVAL_DB")
     return ApprovalStore(db_path=approval_db)
@@ -155,8 +173,24 @@ def get_reply(envelope_id: str, timeout_sec: int = 30) -> dict[str, Any]:
 def get_logs(
     thread_id: str | None = None,
     limit: int = 20,
+    offset: int = 0,
     intent: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
 ) -> dict[str, Any]:
+    since_dt: datetime | None = None
+    until_dt: datetime | None = None
+    if since is not None:
+        try:
+            since_dt = _parse_iso8601(since)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid since format; expected ISO 8601") from exc
+    if until is not None:
+        try:
+            until_dt = _parse_iso8601(until)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid until format; expected ISO 8601") from exc
+
     files = _iter_json_files(PROCESSED_DIR)
     sorted_files = sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
 
@@ -165,13 +199,18 @@ def get_logs(
         data = _load_envelope_from_file(file_path)
         if thread_id is not None and data.get("context") != thread_id:
             continue
+        log_time = _parse_log_time(data)
+        if since_dt is not None and (log_time is None or log_time < since_dt):
+            continue
+        if until_dt is not None and (log_time is None or log_time > until_dt):
+            continue
         payload = data.get("payload")
         payload_intent = payload.get("intent") if isinstance(payload, dict) else None
         if intent is not None and payload_intent != intent:
             continue
         logs.append(_envelope_to_log_item(data))
 
-    return {"logs": logs[:limit], "total": len(logs)}
+    return {"logs": logs[offset : offset + limit], "total": len(logs)}
 
 
 @app.get("/approvals/pending")
