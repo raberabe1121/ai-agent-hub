@@ -739,7 +739,7 @@ def _handle_envelope(env: Envelope) -> Optional[Envelope]:
             reply_payload = {"error": str(exc)}
     else:
         print(f"[agent_worker] intent={intent_name} from={env.sender} → handler=UNKNOWN")
-        reply_payload = {"error": "unknown intent"}
+        reply_payload = {"error": "unknown intent", "status": "failed"}
 
     if reply_payload is None:
         reply_payload = {"error": "empty handler response", "status": "failed"}

@@ -25,7 +25,7 @@ def test_unknown_intent_reply_error():
     env = _make_env({"intent": "unknown"})
     reply = _handle_envelope(env)
     assert reply is not None
-    assert reply.payload == {"error": "unknown intent"}
+    assert reply.payload == {"error": "unknown intent", "status": "failed"}
 
 
 def test_echo_intent_roundtrip():
