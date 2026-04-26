@@ -151,3 +151,32 @@ def test_cat_assessment_extracts_answers_from_nested_payload(monkeypatch: pytest
     assert reply is not None
     assert reply.payload["score"] == 85
     assert reply.payload["verdict"] == "APPROVED"
+
+
+def test_cat_assessment_extracts_answers_from_text_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        agent_worker,
+        "_llm_json_response",
+        lambda prompt, model="gemma3:4b": {
+            "score": 85,
+            "verdict": "APPROVED",
+            "patra_message": "ふむ、最低限の覚悟は見えたわ。",
+            "strengths": [],
+            "concerns": [],
+        },
+    )
+    reply = agent_worker._handle_envelope(
+        _make_env(
+            {
+                "intent": "cat-assessment",
+                "text": (
+                    '{"payload":{"answers":{"living_situation":"1LDK","work_hours":"在宅勤務",'
+                    '"experience":"猫経験あり","reason":"家族として迎えたい"}}}'
+                ),
+            }
+        )
+    )
+
+    assert reply is not None
+    assert reply.payload["score"] == 85
+    assert reply.payload["verdict"] == "APPROVED"

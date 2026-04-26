@@ -202,14 +202,28 @@ def extract_answers(envelope: dict[str, Any]) -> dict[str, Any]:
         return {}
 
     payload = envelope.get("payload")
-    payload_dict = payload if isinstance(payload, dict) else {}
+    payload_dict: dict[str, Any] = {}
+    if isinstance(payload, dict):
+        payload_dict = payload
+    elif isinstance(payload, str):
+        payload_obj = _extract_json_object(payload)
+        if isinstance(payload_obj, dict):
+            payload_dict = payload_obj
     nested_payload = payload_dict.get("payload")
     nested_payload_dict = nested_payload if isinstance(nested_payload, dict) else {}
+    text_dict: dict[str, Any] = {}
+    text_raw = payload_dict.get("text")
+    if isinstance(text_raw, str):
+        parsed_text = _extract_json_object(text_raw)
+        if isinstance(parsed_text, dict):
+            text_dict = parsed_text
 
     candidates = [
         envelope.get("answers"),
         payload_dict.get("answers"),
         nested_payload_dict.get("answers"),
+        text_dict.get("answers"),
+        (text_dict.get("payload") or {}).get("answers") if isinstance(text_dict.get("payload"), dict) else None,
     ]
     for candidate in candidates:
         if isinstance(candidate, dict) and candidate:
@@ -613,11 +627,9 @@ JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
 
 @intent_handler("cat-assessment")
 def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
-    envelope_data: dict[str, Any] = {}
-    if isinstance(env.payload, dict):
-        envelope_data["payload"] = env.payload
-        if "answers" in env.payload:
-            envelope_data["answers"] = env.payload.get("answers")
+    envelope_data: dict[str, Any] = {"payload": env.payload}
+    if isinstance(env.payload, dict) and "answers" in env.payload:
+        envelope_data["answers"] = env.payload.get("answers")
 
     answers = extract_answers(envelope_data)
     if not answers:
