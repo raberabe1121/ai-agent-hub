@@ -177,6 +177,11 @@ def get_intent(envelope: Envelope | dict[str, Any]) -> Optional[str]:
     nested_intent = payload.get("intent")
     if isinstance(nested_intent, str) and nested_intent:
         return nested_intent
+    nested_payload = payload.get("payload")
+    if isinstance(nested_payload, dict):
+        nested_payload_intent = nested_payload.get("intent")
+        if isinstance(nested_payload_intent, str) and nested_payload_intent:
+            return nested_payload_intent
     return None
 
 
@@ -589,13 +594,11 @@ JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
 @intent_handler("cat-assessment")
 def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
     payload = env.payload if isinstance(env.payload, dict) else {}
-    nested_payload = payload.get("payload")
-    if isinstance(nested_payload, dict):
-        payload = nested_payload
-
+    if isinstance(payload.get("payload"), dict):
+        payload = payload.get("payload") or {}
     answers = payload.get("answers", {})
-    if not isinstance(answers, dict):
-        return {"error": "payload.answers must be a dict"}
+    if not isinstance(answers, dict) or not answers:
+        return {"error": "answers missing", "status": "failed"}
 
     prompt = (
         "以下の飼い主候補情報を審査し、猫の飼育適正を評価してください。"
@@ -659,7 +662,7 @@ def _build_reply(env: Envelope, result_payload: Any) -> Envelope:
 def _handle_envelope(env: Envelope) -> Optional[Envelope]:
     intent_name = _extract_intent(env)
     if not intent_name:
-        print("No intent found; generating error reply", env.id)
+        print("Missing intent; generating error reply", env.id)
         return _build_reply(env, {"error": "No intent found", "status": "failed"})
 
     handler = INTENT_HANDLERS.get(intent_name)
