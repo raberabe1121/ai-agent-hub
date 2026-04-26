@@ -20,11 +20,13 @@ from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 
 QUEUE_DIR = Path(os.environ.get("AI_AGENT_HUB_QUEUE_DIR", "./queue"))
 PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed"))
+REPLIES_DIR = Path(os.environ.get("AI_AGENT_HUB_REPLIES_DIR", "./replies"))
 
 
 class EnvelopeRequest(BaseModel):
     intent: str
     text: str | None = None
+    answers: dict[str, Any] | None = None
     sender: str | None = None
     model: str | None = None
     description: str | None = None
@@ -66,11 +68,10 @@ def _find_envelope(envelope_id: str) -> dict[str, Any] | None:
 
 
 def _find_reply_envelope(envelope_id: str) -> dict[str, Any] | None:
-    for file_path in _iter_json_files(PROCESSED_DIR):
-        data = _load_envelope_from_file(file_path)
-        if data.get("inReplyTo") == envelope_id or data.get("in_reply_to") == envelope_id:
-            return data
-    return None
+    reply_path = REPLIES_DIR / f"{envelope_id}.json"
+    if not reply_path.exists():
+        return None
+    return _load_envelope_from_file(reply_path)
 
 
 def _envelope_to_log_item(data: dict[str, Any]) -> dict[str, Any]:
@@ -117,6 +118,8 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     payload: dict[str, Any] = {"intent": request.intent}
     if request.text is not None:
         payload["text"] = request.text
+    if request.answers is not None:
+        payload["answers"] = request.answers
     if request.model is not None:
         payload["model"] = request.model
     if request.description is not None:
@@ -166,7 +169,7 @@ def get_reply(envelope_id: str, timeout_sec: int = 30) -> dict[str, Any]:
         if reply is not None:
             return reply
         time.sleep(1)
-    raise HTTPException(status_code=404, detail="reply not found within timeout")
+    return {"status": "pending"}
 
 
 @app.get("/logs")
