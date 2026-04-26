@@ -1,0 +1,13 @@
+{
+  "name": "anti_loop",
+  "description": "同一パターンの3回以上の繰り返しを検知して停止。ハルシネーションループを防止。",
+  "headers": {
+    "X-Agent-Policy": "entropy-check=required; loop-detection=true"
+  },
+  "rules": {
+    "entropy_threshold": 0.3,
+    "max_similar_messages": 3,
+    "action_on_loop": "dlq",
+    "inject_divergent_context": true
+  }
+}
