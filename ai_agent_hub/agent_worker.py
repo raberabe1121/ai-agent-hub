@@ -197,38 +197,31 @@ def _extract_intent(env: Envelope) -> Optional[str]:
     return get_intent(env)
 
 
-def extract_answers(envelope: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(envelope, dict):
-        return {}
+def find_answers(obj: Any) -> dict[str, Any] | None:
+    if isinstance(obj, str):
+        parsed = _extract_json_object(obj)
+        if isinstance(parsed, dict):
+            return find_answers(parsed)
+        return None
 
-    payload = envelope.get("payload")
-    payload_dict: dict[str, Any] = {}
-    if isinstance(payload, dict):
-        payload_dict = payload
-    elif isinstance(payload, str):
-        payload_obj = _extract_json_object(payload)
-        if isinstance(payload_obj, dict):
-            payload_dict = payload_obj
-    nested_payload = payload_dict.get("payload")
-    nested_payload_dict = nested_payload if isinstance(nested_payload, dict) else {}
-    text_dict: dict[str, Any] = {}
-    text_raw = payload_dict.get("text")
-    if isinstance(text_raw, str):
-        parsed_text = _extract_json_object(text_raw)
-        if isinstance(parsed_text, dict):
-            text_dict = parsed_text
+    if isinstance(obj, dict):
+        if "answers" in obj and isinstance(obj["answers"], dict):
+            return obj["answers"]
 
-    candidates = [
-        envelope.get("answers"),
-        payload_dict.get("answers"),
-        nested_payload_dict.get("answers"),
-        text_dict.get("answers"),
-        (text_dict.get("payload") or {}).get("answers") if isinstance(text_dict.get("payload"), dict) else None,
-    ]
-    for candidate in candidates:
-        if isinstance(candidate, dict) and candidate:
-            return candidate
-    return {}
+        for value in obj.values():
+            result = find_answers(value)
+            if result:
+                return result
+        return None
+
+    if isinstance(obj, list):
+        for item in obj:
+            result = find_answers(item)
+            if result:
+                return result
+        return None
+
+    return None
 
 
 @intent_handler("ping")
@@ -628,18 +621,12 @@ JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
 @intent_handler("cat-assessment")
 def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
     envelope_data: dict[str, Any] = {"payload": env.payload}
-    if isinstance(env.payload, dict) and "answers" in env.payload:
-        envelope_data["answers"] = env.payload.get("answers")
-
-    answers = extract_answers(envelope_data)
+    answers = find_answers(envelope_data) or {}
     if not answers:
-        payload_value = envelope_data.get("payload")
-        payload_keys = list(payload_value.keys()) if isinstance(payload_value, dict) else []
         return {
             "error": "answers missing",
             "status": "failed",
-            "debug_keys": list(envelope_data.keys()),
-            "payload_keys": payload_keys,
+            "debug": envelope_data,
         }
 
     prompt = (
