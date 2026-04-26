@@ -113,4 +113,41 @@ def test_cat_assessment_returns_failed_when_answers_missing() -> None:
     reply = agent_worker._handle_envelope(_make_env({"intent": "cat-assessment"}))
 
     assert reply is not None
-    assert reply.payload == {"error": "answers missing", "status": "failed"}
+    assert reply.payload["error"] == "answers missing"
+    assert reply.payload["status"] == "failed"
+    assert isinstance(reply.payload["debug_keys"], list)
+    assert isinstance(reply.payload["payload_keys"], list)
+
+
+def test_cat_assessment_extracts_answers_from_nested_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        agent_worker,
+        "_llm_json_response",
+        lambda prompt, model="gemma3:4b": {
+            "score": 85,
+            "verdict": "APPROVED",
+            "patra_message": "ふむ、最低限の覚悟は見えたわ。",
+            "strengths": ["在宅勤務で見守り時間を確保できる"],
+            "concerns": ["1LDKの場合、脱走防止導線の確認が必要"],
+        },
+    )
+
+    reply = agent_worker._handle_envelope(
+        _make_env(
+            {
+                "intent": "cat-assessment",
+                "payload": {
+                    "answers": {
+                        "living_situation": "1LDK",
+                        "work_hours": "在宅勤務",
+                        "experience": "猫経験あり",
+                        "reason": "家族として迎えたい",
+                    }
+                },
+            }
+        )
+    )
+
+    assert reply is not None
+    assert reply.payload["score"] == 85
+    assert reply.payload["verdict"] == "APPROVED"

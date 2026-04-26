@@ -197,6 +197,26 @@ def _extract_intent(env: Envelope) -> Optional[str]:
     return get_intent(env)
 
 
+def extract_answers(envelope: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(envelope, dict):
+        return {}
+
+    payload = envelope.get("payload")
+    payload_dict = payload if isinstance(payload, dict) else {}
+    nested_payload = payload_dict.get("payload")
+    nested_payload_dict = nested_payload if isinstance(nested_payload, dict) else {}
+
+    candidates = [
+        envelope.get("answers"),
+        payload_dict.get("answers"),
+        nested_payload_dict.get("answers"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, dict) and candidate:
+            return candidate
+    return {}
+
+
 @intent_handler("ping")
 def _handle_ping(_: Envelope) -> dict:
     return {"pong": True}
@@ -593,12 +613,22 @@ JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
 
 @intent_handler("cat-assessment")
 def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
-    payload = env.payload if isinstance(env.payload, dict) else {}
-    if isinstance(payload.get("payload"), dict):
-        payload = payload.get("payload") or {}
-    answers = payload.get("answers", {})
-    if not isinstance(answers, dict) or not answers:
-        return {"error": "answers missing", "status": "failed"}
+    envelope_data: dict[str, Any] = {}
+    if isinstance(env.payload, dict):
+        envelope_data["payload"] = env.payload
+        if "answers" in env.payload:
+            envelope_data["answers"] = env.payload.get("answers")
+
+    answers = extract_answers(envelope_data)
+    if not answers:
+        payload_value = envelope_data.get("payload")
+        payload_keys = list(payload_value.keys()) if isinstance(payload_value, dict) else []
+        return {
+            "error": "answers missing",
+            "status": "failed",
+            "debug_keys": list(envelope_data.keys()),
+            "payload_keys": payload_keys,
+        }
 
     prompt = (
         "以下の飼い主候補情報を審査し、猫の飼育適正を評価してください。"

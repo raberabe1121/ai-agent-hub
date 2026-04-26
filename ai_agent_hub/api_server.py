@@ -27,6 +27,7 @@ class EnvelopeRequest(BaseModel):
     intent: str
     text: str | None = None
     answers: dict[str, Any] | None = None
+    payload: dict[str, Any] | None = None
     sender: str | None = None
     model: str | None = None
     description: str | None = None
@@ -116,6 +117,8 @@ def _approval_store() -> ApprovalStore:
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     payload: dict[str, Any] = {"intent": request.intent}
+    if request.payload is not None:
+        payload["payload"] = request.payload
     if request.text is not None:
         payload["text"] = request.text
     if request.answers is not None:

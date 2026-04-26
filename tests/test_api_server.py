@@ -45,6 +45,27 @@ def test_post_envelopes_accepts_answers_payload(monkeypatch):
     assert captured["payload"]["answers"] == {"living_situation": "1LDK"}
 
 
+def test_post_envelopes_accepts_nested_payload(monkeypatch):
+    captured = {}
+
+    def _capture_env(env):
+        captured["payload"] = env.payload
+
+    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+
+    response = client.post(
+        "/envelopes",
+        json={
+            "intent": "cat-assessment",
+            "payload": {"answers": {"living_situation": "1LDK"}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["payload"]["intent"] == "cat-assessment"
+    assert captured["payload"]["payload"] == {"answers": {"living_situation": "1LDK"}}
+
+
 def test_get_health_returns_ok():
     response = client.get("/health")
 
