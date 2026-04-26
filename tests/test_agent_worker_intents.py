@@ -54,3 +54,10 @@ def test_help_lists_registered_intents():
     assert isinstance(intents, list)
     assert "ping" in intents
     assert set(intents) >= {"ping", "echo", "help", "list-intents", "summarize"}
+
+
+def test_missing_intent_returns_failed_reply():
+    env = _make_env({"text": "missing intent"})
+    reply = _handle_envelope(env)
+    assert reply is not None
+    assert reply.payload == {"error": "No intent found", "status": "failed"}
