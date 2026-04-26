@@ -75,6 +75,11 @@ PROCESSED_DIR = Path(
     or os.environ.get("AGENT_HUB_PROCESSED_DIR")
     or "./processed"
 )
+REPLIES_DIR = Path(
+    os.environ.get("AI_AGENT_HUB_REPLIES_DIR")
+    or os.environ.get("AGENT_HUB_REPLIES_DIR")
+    or "./replies"
+)
 
 
 INTENT_HANDLERS: Dict[str, Callable[[Envelope], Optional[Any]]] = {}
@@ -156,8 +161,32 @@ def _load_envelope(file_path: Path) -> Envelope:
     return Envelope.from_json(raw)
 
 
+def get_intent(envelope: Envelope | dict[str, Any]) -> Optional[str]:
+    if isinstance(envelope, Envelope):
+        envelope_dict: dict[str, Any] = {
+            "intent": None,
+            "payload": envelope.payload if isinstance(envelope.payload, dict) else {},
+        }
+    else:
+        envelope_dict = envelope
+
+    payload = envelope_dict.get("payload") or {}
+    intent = envelope_dict.get("intent")
+    if isinstance(intent, str) and intent:
+        return intent
+    nested_intent = payload.get("intent")
+    if isinstance(nested_intent, str) and nested_intent:
+        return nested_intent
+    nested_payload = payload.get("payload")
+    if isinstance(nested_payload, dict):
+        nested_payload_intent = nested_payload.get("intent")
+        if isinstance(nested_payload_intent, str) and nested_payload_intent:
+            return nested_payload_intent
+    return None
+
+
 def _extract_intent(env: Envelope) -> Optional[str]:
-    payload = env.payload
+    payload = env.payload if isinstance(env.payload, dict) else {}
     if isinstance(payload, dict):
         headers = payload.get("headers")
         if isinstance(headers, dict):
@@ -165,9 +194,33 @@ def _extract_intent(env: Envelope) -> Optional[str]:
             if str(payment_required).lower() in {"1", "true", "yes"}:
                 return "payment"
 
-        intent = payload.get("intent")
-        if isinstance(intent, str):
-            return intent
+    return get_intent(env)
+
+
+def find_answers(obj: Any) -> dict[str, Any] | None:
+    if isinstance(obj, str):
+        parsed = _extract_json_object(obj)
+        if isinstance(parsed, dict):
+            return find_answers(parsed)
+        return None
+
+    if isinstance(obj, dict):
+        if "answers" in obj and isinstance(obj["answers"], dict):
+            return obj["answers"]
+
+        for value in obj.values():
+            result = find_answers(value)
+            if result:
+                return result
+        return None
+
+    if isinstance(obj, list):
+        for item in obj:
+            result = find_answers(item)
+            if result:
+                return result
+        return None
+
     return None
 
 
@@ -567,12 +620,46 @@ JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
 
 @intent_handler("cat-assessment")
 def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
-    if not isinstance(env.payload, dict):
-        return {"error": "payload must be a dict"}
+    envelope_data: dict[str, Any] = {
+        "payload": env.payload,
+    }
+    if isinstance(env.payload, dict) and isinstance(env.payload.get("answers"), dict):
+        envelope_data["answers"] = env.payload.get("answers")
 
-    answers = env.payload.get("answers")
+    payload = envelope_data.get("payload")
+    if not isinstance(payload, dict):
+        payload = {}
+
+    answers = payload.get("answers")
+    if answers is None and isinstance(envelope_data.get("answers"), dict):
+        answers = envelope_data["answers"]
+    if answers is None and isinstance(payload.get("payload"), dict):
+        nested_payload = payload.get("payload", {})
+        nested_answers = nested_payload.get("answers")
+        if isinstance(nested_answers, dict):
+            answers = nested_answers
+        elif isinstance(nested_payload.get("payload"), dict):
+            deep_nested_answers = nested_payload.get("payload", {}).get("answers")
+            if isinstance(deep_nested_answers, dict):
+                answers = deep_nested_answers
+
+    print("=== WORKER PAYLOAD ===")
+    print(payload)
+    print("=== WORKER ANSWERS ===")
+    print(answers)
+
+    if answers is None:
+        return {
+            "error": "answers missing",
+            "status": "failed",
+            "debug": envelope_data,
+        }
     if not isinstance(answers, dict):
-        return {"error": "payload.answers must be a dict"}
+        return {
+            "error": "answers must be a dict",
+            "status": "failed",
+            "debug": envelope_data,
+        }
 
     prompt = (
         "以下の飼い主候補情報を審査し、猫の飼育適正を評価してください。"
@@ -636,8 +723,8 @@ def _build_reply(env: Envelope, result_payload: Any) -> Envelope:
 def _handle_envelope(env: Envelope) -> Optional[Envelope]:
     intent_name = _extract_intent(env)
     if not intent_name:
-        print("No intent found; skipping envelope", env.id)
-        return None
+        print("Missing intent; generating error reply", env.id)
+        return _build_reply(env, {"error": "No intent found", "status": "failed"})
 
     handler = INTENT_HANDLERS.get(intent_name)
 
@@ -652,10 +739,10 @@ def _handle_envelope(env: Envelope) -> Optional[Envelope]:
             reply_payload = {"error": str(exc)}
     else:
         print(f"[agent_worker] intent={intent_name} from={env.sender} → handler=UNKNOWN")
-        reply_payload = {"error": "unknown intent"}
+        reply_payload = {"error": "unknown intent", "status": "failed"}
 
     if reply_payload is None:
-        return None
+        reply_payload = {"error": "empty handler response", "status": "failed"}
 
     return _build_reply(env, reply_payload)
 
@@ -682,6 +769,12 @@ def _mark_failed(env_id: str) -> None:
         repository.mark_status(env_id, FAILED)
 
 
+def _save_reply(in_reply_to: str, reply: Envelope) -> None:
+    os.makedirs(REPLIES_DIR, exist_ok=True)
+    reply_path = REPLIES_DIR / f"{in_reply_to}.json"
+    reply_path.write_text(reply.to_json(indent=2), encoding="utf-8")
+
+
 def process_next_envelope() -> bool:
     """Process the oldest envelope in storage if present."""
 
@@ -694,6 +787,8 @@ def process_next_envelope() -> bool:
     reply = _handle_envelope(env)
 
     try:
+        if reply:
+            _save_reply(env.id, reply)
         _mark_processed(env.id)
 
         if reply:
