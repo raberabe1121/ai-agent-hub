@@ -117,7 +117,10 @@ def _approval_store() -> ApprovalStore:
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     print("=== INCOMING REQUEST ===")
-    print(request.json())
+    if hasattr(request, "model_dump_json"):
+        print(request.model_dump_json())
+    else:  # pragma: no cover - Pydantic v1 fallback
+        print(request.json())
     payload: dict[str, Any] = dict(request.payload) if isinstance(request.payload, dict) else {}
     payload["intent"] = request.intent
     if request.text is not None:
