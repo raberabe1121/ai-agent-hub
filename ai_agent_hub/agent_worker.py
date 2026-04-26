@@ -620,11 +620,43 @@ JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
 
 @intent_handler("cat-assessment")
 def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
-    envelope_data: dict[str, Any] = {"payload": env.payload}
-    answers = find_answers(envelope_data) or {}
-    if not answers:
+    envelope_data: dict[str, Any] = {
+        "payload": env.payload,
+    }
+    if isinstance(env.payload, dict) and isinstance(env.payload.get("answers"), dict):
+        envelope_data["answers"] = env.payload.get("answers")
+
+    payload = envelope_data.get("payload")
+    if not isinstance(payload, dict):
+        payload = {}
+
+    answers = payload.get("answers")
+    if answers is None and isinstance(envelope_data.get("answers"), dict):
+        answers = envelope_data["answers"]
+    if answers is None and isinstance(payload.get("payload"), dict):
+        nested_payload = payload.get("payload", {})
+        nested_answers = nested_payload.get("answers")
+        if isinstance(nested_answers, dict):
+            answers = nested_answers
+        elif isinstance(nested_payload.get("payload"), dict):
+            deep_nested_answers = nested_payload.get("payload", {}).get("answers")
+            if isinstance(deep_nested_answers, dict):
+                answers = deep_nested_answers
+
+    print("=== WORKER PAYLOAD ===")
+    print(payload)
+    print("=== WORKER ANSWERS ===")
+    print(answers)
+
+    if answers is None:
         return {
             "error": "answers missing",
+            "status": "failed",
+            "debug": envelope_data,
+        }
+    if not isinstance(answers, dict):
+        return {
+            "error": "answers must be a dict",
             "status": "failed",
             "debug": envelope_data,
         }
