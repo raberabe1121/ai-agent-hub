@@ -6,8 +6,10 @@ import importlib
 import os
 import textwrap
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
+from xml.etree import ElementTree
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.cli_skills import CliSkillRunner
@@ -80,6 +82,51 @@ INTENT_HANDLERS: Dict[str, Callable[[Envelope], Optional[Any]]] = {}
 
 def _get_entropy_threshold() -> float:
     return float(os.environ.get("AI_AGENT_HUB_ENTROPY_THRESHOLD", "0.3"))
+
+
+def _extract_json_object(raw_text: str) -> dict[str, Any] | None:
+    text = raw_text.strip()
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        parsed = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict):
+        return parsed
+    return None
+
+
+def _parse_rss_items(content: str, limit: int = 6) -> list[str]:
+    if not content.strip():
+        return []
+
+    try:
+        root = ElementTree.fromstring(content)
+    except ElementTree.ParseError:
+        return []
+
+    items: list[str] = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        description = (item.findtext("description") or "").strip()
+        line = " - ".join(part for part in (title, description) if part)
+        if line:
+            items.append(line)
+        if len(items) >= limit:
+            break
+    return items
 
 
 def intent_handler(name: str) -> Callable[[Callable[[Envelope], Optional[Any]]], Callable[[Envelope], Optional[Any]]]:
@@ -433,6 +480,146 @@ def _handle_llm_query(env: Envelope) -> dict:
         return {"result": content}
     except Exception as exc:
         return {"error": str(exc)}
+
+
+def _llm_json_response(prompt: str, model: str = "gemma3:4b") -> dict[str, Any]:
+    env = Envelope.new(
+        envelope_type="command",
+        sender="https://agent.local/@worker",
+        recipient="https://agent.local/@worker",
+        payload={"intent": "llm-query", "text": prompt, "model": model},
+    )
+    response = _handle_llm_query(env)
+    result_text = response.get("result")
+    if not isinstance(result_text, str):
+        return {}
+    return _extract_json_object(result_text) or {}
+
+
+@intent_handler("threat-scan")
+def _handle_threat_scan(env: Envelope) -> dict[str, Any]:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    keywords = env.payload.get("keywords")
+    languages = env.payload.get("languages")
+    sector = env.payload.get("sector")
+    if not isinstance(keywords, list) or not all(isinstance(k, str) and k.strip() for k in keywords):
+        return {"error": "payload.keywords must be a non-empty list[str]"}
+    if not isinstance(languages, list) or not all(isinstance(lang, str) and lang.strip() for lang in languages):
+        return {"error": "payload.languages must be a non-empty list[str]"}
+    if not isinstance(sector, str) or not sector.strip():
+        return {"error": "payload.sector is required"}
+
+    runner = CliSkillRunner()
+    rss_urls = ["https://news.ycombinator.com/rss"]
+    for keyword in keywords[:4]:
+        for language in languages[:4]:
+            rss_urls.append(
+                "https://news.google.com/rss/search?"
+                f"q={keyword.strip().replace(' ', '+')}&hl={language}&gl=US&ceid=US:{language}"
+            )
+
+    snippets: list[str] = []
+    for url in rss_urls:
+        result = runner.run(skill="curl", args=[url])
+        if result.get("exit_code") != 0:
+            continue
+        output = result.get("output")
+        if isinstance(output, str):
+            snippets.extend(_parse_rss_items(output))
+
+    content = "\n".join(snippets[:30])
+    prompt = f"""
+以下のニュースから猫への脅威（虐待、危険、事故等）を検知してください。
+脅威レベル（1-5）とラベルを返してください。
+JSON形式で返答: {{"level": 1-5, "label": "説明", "active": true/false}}
+ニュース: {content}
+"""
+    judged = _llm_json_response(prompt)
+    try:
+        level = int(judged.get("level", 1))
+    except (TypeError, ValueError):
+        level = 1
+    level = max(1, min(5, level))
+    label = judged.get("label") if isinstance(judged.get("label"), str) else "cat safety baseline"
+    active = bool(judged.get("active", False))
+
+    cells = [{"threatLevel": level, "label": label, "active": active}]
+    while len(cells) < 16:
+        cells.append({"threatLevel": 1, "label": "baseline", "active": False})
+
+    if level >= 4:
+        activity_label = "HIGH"
+    elif level >= 3:
+        activity_label = "MODERATE"
+    else:
+        activity_label = "LOW"
+
+    return {
+        "sector": sector,
+        "cells": cells,
+        "activityLabel": activity_label,
+        "source": "ai-agent-hub-monitor",
+        "updatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    }
+
+
+@intent_handler("cat-assessment")
+def _handle_cat_assessment(env: Envelope) -> dict[str, Any]:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    answers = env.payload.get("answers")
+    if not isinstance(answers, dict):
+        return {"error": "payload.answers must be a dict"}
+
+    prompt = (
+        "以下の飼い主候補情報を審査し、猫の飼育適正を評価してください。"
+        "厳格な審査官『パトラ閣下』として回答し、JSONのみを返してください。"
+        '形式: {"score": 0-100, "verdict": "APPROVED|PROBATION|REJECTED", '
+        '"patra_message": "string", "strengths": ["..."], "concerns": ["..."]}\n'
+        f"回答情報: {json.dumps(answers, ensure_ascii=False)}"
+    )
+    judged = _llm_json_response(prompt)
+    if not judged:
+        return {
+            "score": 0,
+            "verdict": "REJECTED",
+            "patra_message": "評価情報を生成できませんでした。",
+            "strengths": [],
+            "concerns": ["LLM応答が不正でした"],
+        }
+
+    score_raw = judged.get("score", 0)
+    try:
+        score = int(score_raw)
+    except (TypeError, ValueError):
+        score = 0
+    score = max(0, min(100, score))
+
+    verdict = judged.get("verdict")
+    if verdict not in {"APPROVED", "PROBATION", "REJECTED"}:
+        verdict = "PROBATION" if score >= 60 else "REJECTED"
+
+    patra_message = judged.get("patra_message")
+    if not isinstance(patra_message, str):
+        patra_message = "提出情報を再評価せよ。"
+
+    strengths = judged.get("strengths")
+    concerns = judged.get("concerns")
+    if not isinstance(strengths, list):
+        strengths = []
+    if not isinstance(concerns, list):
+        concerns = []
+
+    return {
+        "score": score,
+        "verdict": verdict,
+        "patra_message": patra_message,
+        "strengths": [item for item in strengths if isinstance(item, str)],
+        "concerns": [item for item in concerns if isinstance(item, str)],
+    }
 
 
 def _build_reply(env: Envelope, result_payload: Any) -> Envelope:
