@@ -271,10 +271,13 @@ class AgentHub:
                 f"/envelopes/{envelope_id}/reply",
                 params={"timeout_sec": min(remaining, 1)},
                 timeout=min(remaining, 2),
-                allow_statuses={404},
             )
             if response.status_code == 200:
-                return response.json()
+                body = response.json()
+                if isinstance(body, dict) and body.get("status") == "pending":
+                    time.sleep(0.2)
+                    continue
+                return body
             time.sleep(0.2)
 
         return None
