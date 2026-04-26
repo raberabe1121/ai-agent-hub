@@ -107,3 +107,10 @@ def test_cat_assessment_returns_llm_json(monkeypatch: pytest.MonkeyPatch) -> Non
         "strengths": ["在宅勤務で監視が可能"],
         "concerns": ["1LDKは狭いかもしれない"],
     }
+
+
+def test_cat_assessment_returns_failed_when_answers_missing() -> None:
+    reply = agent_worker._handle_envelope(_make_env({"intent": "cat-assessment"}))
+
+    assert reply is not None
+    assert reply.payload == {"error": "answers missing", "status": "failed"}
