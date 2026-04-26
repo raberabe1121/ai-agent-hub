@@ -33,10 +33,10 @@ demo:
 	./venv/bin/python examples/quickstart.py
 
 demo-newsroom:
-	./venv/bin/python demo_newsroom.py
+	./venv/bin/python demo/demo_newsroom.py
 
 demo-governance:
-	./venv/bin/python demo_expense_approval.py
+	./venv/bin/python demo/demo_expense_approval.py
 
 test:
 	./venv/bin/pytest tests/ -v
