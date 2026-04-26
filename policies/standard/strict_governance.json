@@ -1,0 +1,13 @@
+{
+  "name": "strict_governance",
+  "description": "全ての外部送信に承認が必要。機密情報の外部漏洩を遮断。",
+  "headers": {
+    "X-Agent-Policy": "confidential=block; pii=mask; external-send=require-approval",
+    "X-Agent-Workflow": "spec-approval-required=true"
+  },
+  "rules": {
+    "external_recipients_require_approval": true,
+    "pii_masking": true,
+    "confidential_block": true
+  }
+}

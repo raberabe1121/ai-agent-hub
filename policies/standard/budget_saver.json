@@ -1,0 +1,12 @@
+{
+  "name": "budget_saver",
+  "description": "1日1USD以上の消費を遮断。APIコールのレートを制限。",
+  "headers": {
+    "X-Agent-Cost-Center": "budget=1USD/day; rate-limit=10/hour"
+  },
+  "rules": {
+    "daily_budget_usd": 1.0,
+    "hourly_rate_limit": 10,
+    "alert_on_budget_exceeded": true
+  }
+}
