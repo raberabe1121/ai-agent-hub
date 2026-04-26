@@ -19,13 +19,18 @@ def queue_dirs(tmp_path, monkeypatch):
 
     queue_dir = tmp_path / "queue"
     processed_dir = tmp_path / "processed"
+    replies_dir = tmp_path / "replies"
     queue_dir.mkdir()
     processed_dir.mkdir()
+    replies_dir.mkdir()
 
     monkeypatch.setenv("AI_AGENT_HUB_QUEUE_DIR", str(queue_dir))
     monkeypatch.setenv("AGENT_HUB_QUEUE_DIR", str(queue_dir))
+    monkeypatch.setenv("AI_AGENT_HUB_REPLIES_DIR", str(replies_dir))
+    monkeypatch.setenv("AGENT_HUB_REPLIES_DIR", str(replies_dir))
     monkeypatch.setattr(agent_worker, "get_queue_dir", lambda: queue_dir)
     monkeypatch.setattr(agent_worker, "PROCESSED_DIR", processed_dir)
+    monkeypatch.setattr(agent_worker, "REPLIES_DIR", replies_dir)
 
     return queue_dir, processed_dir
 
