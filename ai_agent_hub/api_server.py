@@ -116,6 +116,8 @@ def _approval_store() -> ApprovalStore:
 
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
+    print("=== INCOMING REQUEST ===")
+    print(request.json())
     payload: dict[str, Any] = dict(request.payload) if isinstance(request.payload, dict) else {}
     payload["intent"] = request.intent
     if request.text is not None:
