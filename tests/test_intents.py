@@ -110,4 +110,4 @@ def test_unknown_intent(enqueue, process_once, sent_envelopes, queue_dirs):
     assert len(sent_envelopes) == 1
     reply = sent_envelopes[0]
     _assert_reply_structure(reply, env)
-    assert reply.payload == {"error": "unknown intent"}
+    assert reply.payload == {"error": "unknown intent", "status": "failed"}
