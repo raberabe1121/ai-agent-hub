@@ -1,6 +1,7 @@
 """Agent worker that processes queued envelopes and dispatches intents."""
 from __future__ import annotations
 
+import argparse
 import json
 import importlib
 import os
@@ -775,6 +776,17 @@ def _save_reply(in_reply_to: str, reply: Envelope) -> None:
     reply_path.write_text(reply.to_json(indent=2), encoding="utf-8")
 
 
+def _is_agent_id(recipient: str) -> bool:
+    if not recipient:
+        return False
+    normalized = recipient.strip().rstrip("/")
+    return normalized.startswith("https://agent.local/@") or normalized.endswith("/@worker")
+
+
+def _is_error_payload(payload: Any) -> bool:
+    return isinstance(payload, dict) and "error" in payload
+
+
 def process_next_envelope() -> bool:
     """Process the oldest envelope in storage if present."""
 
@@ -791,7 +803,7 @@ def process_next_envelope() -> bool:
             _save_reply(env.id, reply)
         _mark_processed(env.id)
 
-        if reply:
+        if reply and not (_is_error_payload(reply.payload) and _is_agent_id(reply.recipient)):
             send_envelope_via_smtp(reply)
         return True
     except Exception:
@@ -799,13 +811,36 @@ def process_next_envelope() -> bool:
         raise
 
 
-def main(poll_interval: float = 1.0) -> None:
-    """Continuously watch storage and process envelopes."""
+def main() -> None:
+    """Watch storage and process envelopes."""
+
+    parser = argparse.ArgumentParser(description="AI Agent Hub Worker")
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Run in continuous loop mode (same as default behavior)",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Process one envelope and exit",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=1.0,
+        help="Polling interval in seconds (default: 1.0)",
+    )
+    args = parser.parse_args()
+
+    if args.once:
+        process_next_envelope()
+        return
 
     while True:
         processed = process_next_envelope()
         if not processed:
-            time.sleep(poll_interval)
+            time.sleep(args.poll_interval)
 
 
 if __name__ == "__main__":
