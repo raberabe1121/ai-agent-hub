@@ -52,6 +52,12 @@ clean:
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	rm -f /tmp/lmtp_debug.log
 
+cleanup-processed:
+	./venv/bin/python -m ai_agent_hub.cleanup --days 7
+
+cleanup-processed-dry:
+	./venv/bin/python -m ai_agent_hub.cleanup --days 7 --dry-run
+
 help:
 	@echo "AI Agent Hub - 利用可能なコマンド"
 	@echo ""
@@ -66,4 +72,4 @@ help:
 	@echo "  make logs         最新ログを表示"
 	@echo "  make clean        一時ファイルを削除"
 
-.PHONY: install start stop demo demo-newsroom demo-governance test status logs clean help
+.PHONY: install start stop demo demo-newsroom demo-governance test status logs clean cleanup-processed cleanup-processed-dry help
