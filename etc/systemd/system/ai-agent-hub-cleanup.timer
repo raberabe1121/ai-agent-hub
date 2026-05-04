@@ -1,8 +1,8 @@
 [Unit]
-Description=Run AI Agent Hub Cleanup daily
+Description=Run AI Agent Hub Cleanup every 3 hours
 
 [Timer]
-OnCalendar=daily
+OnCalendar=*-*-* 00/3:00:00
 Persistent=true
 
 [Install]

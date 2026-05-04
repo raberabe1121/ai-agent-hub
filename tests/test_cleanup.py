@@ -5,7 +5,7 @@ from pathlib import Path
 from ai_agent_hub.cleanup import cleanup_processed
 
 
-def test_cleanup_processed_days_zero_deletes_all_files(monkeypatch, tmp_path: Path) -> None:
+def test_cleanup_processed_hours_zero_deletes_all_files(monkeypatch, tmp_path: Path) -> None:
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir(exist_ok=True)
     for name in ("a.json", "b.json", "c.json"):
@@ -13,7 +13,7 @@ def test_cleanup_processed_days_zero_deletes_all_files(monkeypatch, tmp_path: Pa
 
     monkeypatch.setenv("AI_AGENT_HUB_PROCESSED_DIR", str(processed_dir))
 
-    deleted = cleanup_processed(days=0)
+    deleted = cleanup_processed(hours=0)
 
     assert deleted == 3
     assert list(processed_dir.glob("*.json")) == []
@@ -27,13 +27,13 @@ def test_cleanup_processed_dry_run_does_not_delete_files(monkeypatch, tmp_path: 
 
     monkeypatch.setenv("AI_AGENT_HUB_PROCESSED_DIR", str(processed_dir))
 
-    deleted = cleanup_processed(days=0, dry_run=True)
+    deleted = cleanup_processed(hours=0, dry_run=True)
 
     assert deleted == 1
     assert file_path.exists()
 
 
-def test_cleanup_processed_large_days_deletes_nothing(monkeypatch, tmp_path: Path) -> None:
+def test_cleanup_processed_large_hours_deletes_nothing(monkeypatch, tmp_path: Path) -> None:
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir(exist_ok=True)
     file_path = processed_dir / "a.json"
@@ -41,7 +41,7 @@ def test_cleanup_processed_large_days_deletes_nothing(monkeypatch, tmp_path: Pat
 
     monkeypatch.setenv("AI_AGENT_HUB_PROCESSED_DIR", str(processed_dir))
 
-    deleted = cleanup_processed(days=999)
+    deleted = cleanup_processed(hours=99999)
 
     assert deleted == 0
     assert file_path.exists()

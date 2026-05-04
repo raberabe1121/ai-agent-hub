@@ -5,13 +5,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-def cleanup_processed(days: int = 1, dry_run: bool = False) -> int:
-    """7日以上前のprocessedファイルを削除する"""
+def cleanup_processed(hours: int = 24, dry_run: bool = False) -> int:
+    """指定した時間より前のprocessedファイルを削除する"""
     processed_dir = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed"))
     if not processed_dir.exists():
         return 0
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     deleted = 0
     for file_path in processed_dir.glob("*.json"):
         mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=timezone.utc)
@@ -27,10 +27,10 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Cleanup processed envelopes")
     parser.add_argument(
-        "--days",
+        "--hours",
         type=int,
-        default=1,
-        help="Delete files older than N days (default: 1)",
+        default=int(os.environ.get("AI_AGENT_HUB_RETENTION_HOURS", "24")),
+        help="Delete files older than N hours (default: AI_AGENT_HUB_RETENTION_HOURS or 24)",
     )
     parser.add_argument(
         "--dry-run",
@@ -39,9 +39,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    deleted = cleanup_processed(days=args.days, dry_run=args.dry_run)
+    deleted = cleanup_processed(hours=args.hours, dry_run=args.dry_run)
     action = "Would delete" if args.dry_run else "Deleted"
-    print(f"{action} {deleted} files older than {args.days} days")
+    print(f"{action} {deleted} files older than {args.hours} hours")
 
 
 if __name__ == "__main__":
