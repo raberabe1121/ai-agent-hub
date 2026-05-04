@@ -4,7 +4,7 @@ Description=AI Agent Hub Cleanup
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/ai-agent-hub
-ExecStart=/opt/ai-agent-hub/venv/bin/python -m ai_agent_hub.cleanup --days 7
+ExecStart=/opt/ai-agent-hub/venv/bin/python -m ai_agent_hub.cleanup --days 1
 User=opc
 Group=opc
 Environment=AI_AGENT_HUB_PROCESSED_DIR=/opt/ai-agent-hub/processed

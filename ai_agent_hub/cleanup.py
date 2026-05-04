@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-def cleanup_processed(days: int = 7, dry_run: bool = False) -> int:
+def cleanup_processed(days: int = 1, dry_run: bool = False) -> int:
     """7日以上前のprocessedファイルを削除する"""
     processed_dir = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed"))
     if not processed_dir.exists():
@@ -29,8 +29,8 @@ def main() -> None:
     parser.add_argument(
         "--days",
         type=int,
-        default=7,
-        help="Delete files older than N days (default: 7)",
+        default=1,
+        help="Delete files older than N days (default: 1)",
     )
     parser.add_argument(
         "--dry-run",
