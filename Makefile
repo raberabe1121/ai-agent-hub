@@ -53,10 +53,10 @@ clean:
 	rm -f /tmp/lmtp_debug.log
 
 cleanup-processed:
-	./venv/bin/python -m ai_agent_hub.cleanup --days 7
+	./venv/bin/python -m ai_agent_hub.cleanup --days 1
 
 cleanup-processed-dry:
-	./venv/bin/python -m ai_agent_hub.cleanup --days 7 --dry-run
+	./venv/bin/python -m ai_agent_hub.cleanup --days 1 --dry-run
 
 help:
 	@echo "AI Agent Hub - 利用可能なコマンド"
