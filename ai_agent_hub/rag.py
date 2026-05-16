@@ -113,8 +113,8 @@ class RAGStore:
                 FROM vec_documents v
                 JOIN rag_documents d ON d.id = v.rowid
                 WHERE v.embedding MATCH ?
+                AND k = ?
                 ORDER BY v.distance
-                LIMIT ?
                 """,
                 (json.dumps(embedding), limit),
             ).fetchall()
