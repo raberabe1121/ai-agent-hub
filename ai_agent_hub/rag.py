@@ -32,7 +32,7 @@ class RAGStore:
         if getattr(self, "_initialized", False):
             return
         self.db_path = db_path
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.enable_load_extension(True)
         import sqlite_vec
