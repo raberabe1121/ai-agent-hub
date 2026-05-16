@@ -24,6 +24,8 @@ DEFAULT_INTENTS: list[tuple[str, str]] = [
     ("reject", "却下する"),
     ("payment", "USDC決済を実行する"),
     ("entropy-check", "エントロピーを計算する"),
+    ("rag-index", "RAGにドキュメントを登録する"),
+    ("rag-query", "RAGを検索して回答する"),
 ]
 
 
@@ -238,6 +240,41 @@ def intents(api_url: str) -> None:
             click.echo(f"  {name:<17} {description}")
         else:
             click.echo(f"  {name}")
+
+
+@main.command("rag-index")
+@click.option("--text", type=str, default=None, help="インデックスするテキスト")
+@click.option("--file", "file_path", type=click.Path(exists=True), default=None, help="インデックスするファイル")
+@click.option("--source", type=str, default=None, help="ソース名")
+@click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
+def rag_index(text: str | None, file_path: str | None, source: str | None, api_url: str) -> None:
+    if not text and not file_path:
+        raise click.ClickException("--text または --file のどちらかが必要です")
+    if text and file_path:
+        raise click.ClickException("--text と --file は同時に指定できません")
+
+    content = text
+    if file_path:
+        content = click.open_file(file_path, mode="r", encoding="utf-8").read()
+        if not source:
+            source = file_path
+
+    payload = {"intent": "rag-index", "text": content, "source": source}
+    base = _normalize_url(api_url)
+    result = _api_call("POST", f"{base}/rag/index", payload=payload, timeout=60)
+    click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
+
+
+@main.command("rag-query")
+@click.option("--query", required=True, type=str, help="検索クエリ")
+@click.option("--limit", type=int, default=5, show_default=True, help="検索件数")
+@click.option("--no-llm", is_flag=True, default=False, help="LLMを使わず検索結果のみ返す")
+@click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
+def rag_query(query: str, limit: int, no_llm: bool, api_url: str) -> None:
+    payload = {"intent": "rag-query", "query": query, "limit": limit, "use_llm": not no_llm}
+    base = _normalize_url(api_url)
+    result = _api_call("POST", f"{base}/rag/query", payload=payload, timeout=60)
+    click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
 
 
 if __name__ == "__main__":

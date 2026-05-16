@@ -129,3 +129,40 @@ def test_logs_handles_null_fields(monkeypatch):
     assert result.exit_code == 0
     assert "N/A" in result.output
     assert "unknown → unknown" in result.output
+
+
+def test_rag_index_calls_rag_endpoint(monkeypatch):
+    captured = {}
+
+    def fake_api_call(method, url, **kwargs):
+        captured["method"] = method
+        captured["url"] = url
+        captured["payload"] = kwargs.get("payload")
+        return {"status": "indexed", "doc_id": 1, "source": "memo"}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-index", "--text", "hello", "--source", "memo"])
+
+    assert result.exit_code == 0
+    assert captured["method"] == "POST"
+    assert captured["url"].endswith("/rag/index")
+
+
+def test_rag_query_calls_rag_endpoint(monkeypatch):
+    captured = {}
+
+    def fake_api_call(method, url, **kwargs):
+        captured["method"] = method
+        captured["url"] = url
+        captured["payload"] = kwargs.get("payload")
+        return {"query": "hello", "sources": []}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-query", "--query", "hello", "--no-llm"])
+
+    assert result.exit_code == 0
+    assert captured["method"] == "POST"
+    assert captured["url"].endswith("/rag/query")
+    assert captured["payload"]["use_llm"] is False
