@@ -8,7 +8,6 @@ from threading import Lock
 from typing import Any
 
 
-
 class RAGStore:
     """Simple singleton RAG store."""
 
@@ -24,37 +23,52 @@ class RAGStore:
                 instance = super().__new__(cls)
                 cls._instance = instance
                 cls._instance_db_path = db_path
-                instance._initialized = False
             return cls._instance
 
     def __init__(self, db_path: str) -> None:
-        if getattr(self, "_initialized", False):
-            return
         self.db_path = db_path
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.enable_load_extension(True)
+        if not hasattr(self, "_tables_lock"):
+            self._tables_lock = Lock()
+            self._tables_initialized = False
+
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return a fresh SQLite connection per call (thread-safe for FastAPI workers)."""
         import sqlite_vec
 
-        sqlite_vec.load(self.conn)
-        self.conn.enable_load_extension(False)
-        self._init_tables()
-        self._initialized = True
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        return conn
+
+    def _ensure_tables(self) -> None:
+        if self._tables_initialized:
+            return
+        with self._tables_lock:
+            if self._tables_initialized:
+                return
+            self._init_tables()
+            self._tables_initialized = True
 
     def _init_tables(self) -> None:
-        self.conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[384])")
-        self.conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS rag_documents (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              content TEXT NOT NULL,
-              metadata TEXT,
-              source TEXT,
-              created_at TEXT DEFAULT (datetime('now'))
+        conn = self._get_conn()
+        try:
+            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[384])")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS rag_documents (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  content TEXT NOT NULL,
+                  metadata TEXT,
+                  source TEXT,
+                  created_at TEXT DEFAULT (datetime('now'))
+                )
+                """
             )
-            """
-        )
-        self.conn.commit()
+            conn.commit()
+        finally:
+            conn.close()
 
     @classmethod
     def _get_model(cls) -> Any:
@@ -72,30 +86,40 @@ class RAGStore:
         return [float(v) for v in vec.tolist()]
 
     def add_document(self, content: str, source: str | None = None, metadata: dict[str, Any] | None = None) -> int:
+        self._ensure_tables()
         embedding = self._get_embedding(content)
         metadata_json = json.dumps(metadata, ensure_ascii=False) if metadata is not None else None
-        cursor = self.conn.execute(
-            "INSERT INTO rag_documents (content, metadata, source) VALUES (?, ?, ?)",
-            (content, metadata_json, source),
-        )
-        doc_id = int(cursor.lastrowid)
-        self.conn.execute("INSERT INTO vec_documents(rowid, embedding) VALUES (?, ?)", (doc_id, json.dumps(embedding)))
-        self.conn.commit()
-        return doc_id
+        conn = self._get_conn()
+        try:
+            cursor = conn.execute(
+                "INSERT INTO rag_documents (content, metadata, source) VALUES (?, ?, ?)",
+                (content, metadata_json, source),
+            )
+            doc_id = int(cursor.lastrowid)
+            conn.execute("INSERT INTO vec_documents(rowid, embedding) VALUES (?, ?)", (doc_id, json.dumps(embedding)))
+            conn.commit()
+            return doc_id
+        finally:
+            conn.close()
 
     def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        self._ensure_tables()
         embedding = self._get_embedding(query)
-        rows = self.conn.execute(
-            """
-            SELECT d.id, d.content, d.source, d.metadata, v.distance
-            FROM vec_documents v
-            JOIN rag_documents d ON d.id = v.rowid
-            WHERE v.embedding MATCH ?
-            ORDER BY v.distance
-            LIMIT ?
-            """,
-            (json.dumps(embedding), limit),
-        ).fetchall()
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT d.id, d.content, d.source, d.metadata, v.distance
+                FROM vec_documents v
+                JOIN rag_documents d ON d.id = v.rowid
+                WHERE v.embedding MATCH ?
+                ORDER BY v.distance
+                LIMIT ?
+                """,
+                (json.dumps(embedding), limit),
+            ).fetchall()
+        finally:
+            conn.close()
 
         results: list[dict[str, Any]] = []
         for row in rows:
@@ -118,7 +142,12 @@ class RAGStore:
         return results
 
     def delete_document(self, doc_id: int) -> bool:
-        cur = self.conn.execute("DELETE FROM rag_documents WHERE id = ?", (doc_id,))
-        self.conn.execute("DELETE FROM vec_documents WHERE rowid = ?", (doc_id,))
-        self.conn.commit()
-        return cur.rowcount > 0
+        self._ensure_tables()
+        conn = self._get_conn()
+        try:
+            cur = conn.execute("DELETE FROM rag_documents WHERE id = ?", (doc_id,))
+            conn.execute("DELETE FROM vec_documents WHERE rowid = ?", (doc_id,))
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
