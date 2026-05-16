@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sqlite3
 from threading import Lock
@@ -67,16 +66,13 @@ class RAGStore:
                     cls._embedding_model = TextEmbedding("BAAI/bge-small-en-v1.5")
         return cls._embedding_model
 
-    async def _get_embedding(self, text: str) -> list[float]:
-        def _compute() -> list[float]:
-            model = self._get_model()
-            vec = list(model.embed([text]))[0]
-            return [float(v) for v in vec.tolist()]
-
-        return await asyncio.to_thread(_compute)
+    def _get_embedding(self, text: str) -> list[float]:
+        model = self._get_model()
+        vec = list(model.embed([text]))[0]
+        return [float(v) for v in vec.tolist()]
 
     def add_document(self, content: str, source: str | None = None, metadata: dict[str, Any] | None = None) -> int:
-        embedding = asyncio.run(self._get_embedding(content))
+        embedding = self._get_embedding(content)
         metadata_json = json.dumps(metadata, ensure_ascii=False) if metadata is not None else None
         cursor = self.conn.execute(
             "INSERT INTO rag_documents (content, metadata, source) VALUES (?, ?, ?)",
@@ -88,7 +84,7 @@ class RAGStore:
         return doc_id
 
     def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
-        embedding = asyncio.run(self._get_embedding(query))
+        embedding = self._get_embedding(query)
         rows = self.conn.execute(
             """
             SELECT d.id, d.content, d.source, d.metadata, v.distance
