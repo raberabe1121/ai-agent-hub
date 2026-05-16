@@ -1,11 +1,13 @@
 # AI Agent Hub
+
 ### Governance Messaging Layer for AI Agents
-#### v0.5 | "The SMTP for the Agentic Era."
+
+#### v0.6 | "The SMTP for the Agentic Era."
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue)](#技術アーキテクチャ)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![Version: 0.5](https://img.shields.io/badge/Version-v0.5-green)](#ロードマップ)
+[![Version: 0.6](https://img.shields.io/badge/Version-v0.6-green)](#ロードマップ)
 
 > AIエージェントの通信・監査・ガバナンスを担う、SMTP/MIMEベースのメッセージング基盤。
 
@@ -14,12 +16,15 @@
 ## これは何か・何でないか
 
 **AI Agent Hubは：**
+
 - ✅ AIエージェント間の**非同期メッセージング基盤**
 - ✅ 全通信を追跡可能なログとして残す**監査レイヤー**
 - ✅ ポリシー・承認フロー・予算制御を担う**ガバナンスレイヤー**
 - ✅ 既存のメールインフラ（Postfix）と統合可能な**配送保証レイヤー**
+- ✅ fastembed + sqlite-vecによる**軽量RAG（知識ベース検索）**
 
 **AI Agent Hubは以下ではありません：**
+
 - ❌ OSではない（プロセス管理・リソース隔離・スケジューリングは提供しない）
 - ❌ リアルタイム通信基盤ではない（WebSocket/gRPCが必要なユースケースには不向き）
 - ❌ LangChain/CrewAIの代替ではない（それらの上で動く監査・ガバナンス層）
@@ -36,6 +41,7 @@ AIを業務に導入する際の最大の障壁は「知能の欠如」ではな
 - 「AIの判断を誰が承認したか不明」→ **Human-in-the-loopで承認フローを強制**
 - 「AIが予算を超えて動いたら困る」→ **X-Agent-Cost-Centerで予算制御**
 - 「機密情報がAIを経由して外部に漏れないか」→ **X-Agent-Policyで配送レイヤーで遮断**
+- 「エージェントに社内知識を持たせたい」→ **RAGで知識ベースを構築・検索**
 
 **二次ターゲット：マルチエージェントシステムの研究者・開発者**
 
@@ -45,7 +51,7 @@ LangGraph/AutoGen/CrewAIと組み合わせて、エージェント間通信に�
 
 ## 5分で動かす
 
-### systemd方式（現在推奨）
+### systemd方式
 
 ```bash
 git clone https://github.com/raberabe1121/ai-agent-os.git
@@ -75,7 +81,7 @@ AI Agent Hub ステータス
    {"result": "今日の横浜の天気は晴れ時々くもりで、最高気温は28℃..."}
 ```
 
-### Docker Compose（v0.6リリース予定）
+### Docker Compose方式
 
 ```bash
 git clone https://github.com/raberabe1121/ai-agent-os
@@ -129,6 +135,12 @@ hub intents
 hub pending
 hub approve <approval-id>
 hub reject <approval-id> --reason "予算超過"
+
+# RAG（知識ベース検索）
+hub rag-index --text "ドキュメントの内容" --source "出典名"
+hub rag-index --file path/to/doc.txt --source "ファイル名"
+hub rag-query --query "質問内容"
+hub rag-query --query "質問内容" --limit 3 --no-llm
 ```
 
 ### 🌐 HTTP REST API
@@ -148,6 +160,15 @@ curl "http://localhost:8080/logs?limit=10&intent=llm-query"
 # 承認管理
 curl http://localhost:8080/approvals/pending
 curl -X POST http://localhost:8080/approvals/{id}/approve
+
+# RAG
+curl -X POST http://localhost:8080/rag/index \
+  -H "Content-Type: application/json" \
+  -d '{"text": "ドキュメントの内容", "source": "出典名"}'
+
+curl -X POST http://localhost:8080/rag/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "質問内容", "limit": 5, "use_llm": true}'
 
 # ヘルスチェック
 curl http://localhost:8080/health
@@ -178,9 +199,35 @@ for log in logs:
     print(f"{log.time} | {log.intent} | {log.payload}")
 ```
 
-詳細は [examples/quickstart.py](examples/quickstart.py) を参照してください。
+詳細は [examples/quickstart.py](https://github.com/raberabe1121/ai-agent-os/blob/main/examples/quickstart.py) を参照してください。
 
-API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](docs/python-sdk-api-reference.md) を参照してください。
+API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](https://github.com/raberabe1121/ai-agent-os/blob/main/docs/python-sdk-api-reference.md) を参照してください。
+
+---
+
+## RAG（知識ベース検索）
+
+fastembed + sqlite-vecによる軽量RAGを内蔵しています。外部サービス不要で、既存の`agent_hub.db`に統合されます。
+
+| 項目 | 内容 |
+| --- | --- |
+| Embeddingモデル | BAAI/bge-small-en-v1.5（384次元） |
+| ベクトルDB | sqlite-vec（SQLite拡張） |
+| メモリ使用 | ~200MB（950MB環境でも動作確認済み） |
+
+```bash
+# ドキュメントを登録
+hub rag-index --text "AI Agent HubはSMTPベースのガバナンスレイヤーです" --source "readme"
+hub rag-index --file ./docs/policy.txt --source "policy"
+
+# 検索（LLMが回答を生成）
+hub rag-query --query "承認フローについて教えて"
+# → {"answer": "Human-in-the-loopで承認フローを強制できます...", "sources": [...]}
+
+# 検索結果のみ（LLMなし・高速）
+hub rag-query --query "承認フローについて" --limit 3 --no-llm
+# → {"sources": [{"content": "...", "source": "readme", "distance": 0.71}], "query": "..."}
+```
 
 ---
 
@@ -338,6 +385,7 @@ flowchart TD
         WORKER["Agent Worker\nIntent Dispatcher"]
         DLQ["Dead Letter Queue"]
         HITL["Human-in-the-Loop\nApproval Store"]
+        RAG["RAG Store\nfastembed + sqlite-vec"]
     end
 
     subgraph LLM["🧠 LLM Layer"]
@@ -358,6 +406,7 @@ flowchart TD
     WORKER --> OPENAI
     WORKER -->|失敗時| DLQ
     WORKER -->|承認待ち| HITL
+    WORKER -->|rag-index/rag-query| RAG
     WORKER -->|Reply| SMTP
 ```
 
@@ -366,7 +415,7 @@ flowchart TD
 ## 対応LLMプロバイダー
 
 | プロバイダー | 設定 | モデル例 |
-|------------|------|---------|
+| --- | --- | --- |
 | Ollama Cloud（デフォルト） | `LLM_PROVIDER=ollama` | `gemma3:4b`, `ministral-3:3b` |
 | OpenAI | `LLM_PROVIDER=openai` | `gpt-4o-mini` |
 
@@ -375,13 +424,13 @@ flowchart TD
 ## ロードマップ
 
 | バージョン | 主な機能 | 状態 |
-|-----------|---------|------|
-| **v0.5（現在）** | CLI・REST API・Python SDK・Ollama連携・Human-in-the-loop | ✅ |
-| **v0.6** | Docker Compose・SDK APIリファレンス整備 | 📋 次期 |
+| --- | --- | --- |
+| **v0.5** | CLI・REST API・Python SDK・Ollama連携・Human-in-the-loop | ✅ |
+| **v0.6（現在）** | Docker Compose・RAG（fastembed + sqlite-vec）・SDK APIリファレンス | ✅ |
 | **v0.7** | LangGraph / AutoGen / CrewAI ブリッジ正式対応 | 📋 計画中 |
 | **v1.0** | AWS Serverless・KMS/CloudTrail統合・Enterprise対応 | 🔭 将来 |
 
-### Phase 1 実装済み機能
+### 実装済み機能
 
 - ✅ LMTP Server（asyncio）・Envelope Model・Agent Worker
 - ✅ Dead Letter Queue・リトライ・長期状態管理
@@ -395,6 +444,8 @@ flowchart TD
 - ✅ HTTP REST API（FastAPI）
 - ✅ CLIツール（`hub`コマンド）
 - ✅ Python SDK（`AgentHub`クラス）
+- ✅ Docker Compose対応
+- ✅ RAG（rag-index / rag-query、fastembed + sqlite-vec）
 
 ---
 
@@ -408,4 +459,4 @@ flowchart TD
 
 ## ライセンス
 
-MIT — 詳細は [LICENSE](LICENSE) を参照してください。
+MIT — 詳細は [LICENSE](https://github.com/raberabe1121/ai-agent-os/blob/main/LICENSE) を参照してください。
