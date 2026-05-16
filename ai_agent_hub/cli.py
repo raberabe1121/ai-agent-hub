@@ -261,7 +261,7 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, api_u
 
     payload = {"intent": "rag-index", "text": content, "source": source}
     base = _normalize_url(api_url)
-    result = _api_call("POST", f"{base}/envelopes/wait", payload=payload, timeout=60)
+    result = _api_call("POST", f"{base}/rag/index", payload=payload, timeout=60)
     click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
 
 
@@ -273,7 +273,7 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, api_u
 def rag_query(query: str, limit: int, no_llm: bool, api_url: str) -> None:
     payload = {"intent": "rag-query", "query": query, "limit": limit, "use_llm": not no_llm}
     base = _normalize_url(api_url)
-    result = _api_call("POST", f"{base}/envelopes/wait", payload=payload, timeout=60)
+    result = _api_call("POST", f"{base}/rag/query", payload=payload, timeout=60)
     click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
 
 
