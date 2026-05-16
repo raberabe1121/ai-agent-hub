@@ -105,18 +105,19 @@ class RAGStore:
     def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         self._ensure_tables()
         embedding = self._get_embedding(query)
+        k = max(1, int(limit))
         conn = self._get_conn()
         try:
             rows = conn.execute(
-                """
+                f"""
                 SELECT d.id, d.content, d.source, d.metadata, v.distance
                 FROM vec_documents v
                 JOIN rag_documents d ON d.id = v.rowid
                 WHERE v.embedding MATCH ?
-                AND k = ?
+                AND k = {k}
                 ORDER BY v.distance
                 """,
-                (json.dumps(embedding), limit),
+                (json.dumps(embedding),),
             ).fetchall()
         finally:
             conn.close()
