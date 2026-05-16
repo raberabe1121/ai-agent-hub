@@ -207,26 +207,83 @@ API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](https:
 
 ## RAG（知識ベース検索）
 
-fastembed + sqlite-vecによる軽量RAGを内蔵しています。外部サービス不要で、既存の`agent_hub.db`に統合されます。
+### アーキテクチャ
+
+外部サービス不要の完全自己完結型RAGを内蔵しています。
+
+```
+テキスト入力
+    ↓
+fastembed（BAAI/bge-small-en-v1.5）
+    ↓ 384次元ベクトルに変換
+sqlite-vec（SQLite拡張）
+    ↓ KNN検索（コサイン距離）
+関連ドキュメントを取得
+    ↓ use_llm=trueの場合
+Ollama Cloud（gemma3:4b等）
+    ↓ コンテキストを与えて回答生成
+回答を返す
+```
+
+### 技術スタック
 
 | 項目 | 内容 |
 | --- | --- |
-| Embeddingモデル | BAAI/bge-small-en-v1.5（384次元） |
-| ベクトルDB | sqlite-vec（SQLite拡張） |
-| メモリ使用 | ~200MB（950MB環境でも動作確認済み） |
+| Embeddingライブラリ | [fastembed](https://github.com/qdrant/fastembed) v0.8.0 |
+| Embeddingモデル | `BAAI/bge-small-en-v1.5`（384次元、~50MB） |
+| ベクトルDB | [sqlite-vec](https://github.com/asg017/sqlite-vec) v0.1.9（SQLite拡張） |
+| 距離関数 | コサイン距離（vec0仮想テーブル） |
+| ストレージ | 既存の`agent_hub.db`に統合（追加DBファイル不要） |
+| メモリ使用量 | Embeddingモデル ~200MB（950MB RAM環境で動作確認済み） |
+
+### 設計上の選択理由
+
+**なぜfastembedか**
+- `pip install fastembed`だけで完結。ONNXランタイム内蔵のため追加サービス不要
+- `BAAI/bge-small-en-v1.5`はモデルサイズ50MBと軽量ながら多言語対応
+- Ollama Cloud embed APIが利用不可だったため（`unauthorized`エラー）、ローカル完結を選択
+
+**なぜsqlite-vecか**
+- 既存の`agent_hub.db`（SQLite）に`vec0`仮想テーブルを追加するだけで導入可能
+- ChromaDB・Qdrantと違い、追加プロセスやポートが不要
+- 950MB RAM制約のOCI環境でも安定動作
+
+### 使い方
 
 ```bash
 # ドキュメントを登録
 hub rag-index --text "AI Agent HubはSMTPベースのガバナンスレイヤーです" --source "readme"
 hub rag-index --file ./docs/policy.txt --source "policy"
 
-# 検索（LLMが回答を生成）
+# 検索 + LLMによる回答生成（デフォルト）
 hub rag-query --query "承認フローについて教えて"
-# → {"answer": "Human-in-the-loopで承認フローを強制できます...", "sources": [...]}
+# → {
+#     "answer": "Human-in-the-loopで承認フローを強制できます...",
+#     "sources": [{"content": "...", "source": "readme", "distance": 0.71}],
+#     "query": "承認フローについて教えて"
+#   }
 
 # 検索結果のみ（LLMなし・高速）
 hub rag-query --query "承認フローについて" --limit 3 --no-llm
-# → {"sources": [{"content": "...", "source": "readme", "distance": 0.71}], "query": "..."}
+# → {
+#     "sources": [{"content": "...", "source": "readme", "distance": 0.71}],
+#     "query": "承認フローについて"
+#   }
+```
+
+### REST API
+
+```bash
+# インデックス登録
+curl -X POST http://localhost:8080/rag/index \
+  -H "Content-Type: application/json" \
+  -d '{"text": "ドキュメントの内容", "source": "出典名"}'
+# → {"status": "indexed", "doc_id": 1, "source": "出典名"}
+
+# 検索
+curl -X POST http://localhost:8080/rag/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "質問内容", "limit": 5, "use_llm": true}'
 ```
 
 ---
