@@ -77,7 +77,9 @@ class RAGStore:
                 if cls._embedding_model is None:
                     from fastembed import TextEmbedding
 
-                    cls._embedding_model = TextEmbedding("BAAI/bge-small-en-v1.5")
+                    cls._embedding_model = TextEmbedding(
+                        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                    )
         return cls._embedding_model
 
     def _get_embedding(self, text: str) -> list[float]:
