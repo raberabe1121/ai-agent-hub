@@ -1,7 +1,7 @@
 install:
 	python3 -m venv venv
 	./venv/bin/pip install -e .
-	./venv/bin/pip install fastapi uvicorn httpx openai click
+	./venv/bin/pip install fastapi uvicorn httpx openai click fastembed sqlite-vec
 	@echo ""
 	@echo "✅ インストール完了"
 	@echo "次のコマンドで環境を有効化してください："
