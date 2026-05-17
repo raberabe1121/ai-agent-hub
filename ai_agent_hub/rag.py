@@ -54,7 +54,8 @@ class RAGStore:
     def _init_tables(self) -> None:
         conn = self._get_conn()
         try:
-            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[384])")
+            conn.execute("DROP TABLE IF EXISTS vec_documents")
+            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[384], distance_metric=cosine)")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS rag_documents (
