@@ -104,7 +104,7 @@ class RAGStore:
         finally:
             conn.close()
 
-    def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    def search(self, query: str, limit: int = 5, max_distance: float | None = None) -> list[dict[str, Any]]:
         self._ensure_tables()
         embedding = self._get_embedding(query)
         k = max(1, int(limit))
@@ -142,6 +142,8 @@ class RAGStore:
                     "distance": row["distance"],
                 }
             )
+        if max_distance is not None:
+            results = [r for r in results if r["distance"] <= max_distance]
         return results
 
     def delete_document(self, doc_id: int) -> bool:

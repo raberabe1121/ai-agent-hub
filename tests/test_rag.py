@@ -13,14 +13,17 @@ class FakeRAGStore:
         self.docs.append({"id": doc_id, "content": content, "source": source, "metadata": metadata})
         return doc_id
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
+    def search(self, query: str, limit: int = 5, max_distance: float | None = None) -> list[dict]:
         ranked = sorted(
             self.docs,
             key=lambda d: 0 if query.lower() in d["content"].lower() else 1,
         )
-        return [
+        results = [
             {**doc, "distance": float(idx)} for idx, doc in enumerate(ranked[:limit])
         ]
+        if max_distance is not None:
+            results = [item for item in results if item["distance"] <= max_distance]
+        return results
 
 
 def _make_env(payload):
@@ -82,3 +85,12 @@ def test_rag_query_no_llm(monkeypatch) -> None:
     assert reply is not None
     assert "answer" not in reply.payload
     assert len(reply.payload["sources"]) == 1
+
+
+def test_search_max_distance() -> None:
+    store = FakeRAGStore()
+    store.add_document("cat care guide")
+    store.add_document("other topic")
+    results = store.search("cat", max_distance=0.0)
+    assert len(results) == 1
+    assert results[0]["content"] == "cat care guide"

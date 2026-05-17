@@ -279,9 +279,10 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, api_u
 @click.option("--query", required=True, type=str, help="検索クエリ")
 @click.option("--limit", type=int, default=5, show_default=True, help="検索件数")
 @click.option("--no-llm", is_flag=True, default=False, help="LLMを使わず検索結果のみ返す")
+@click.option("--max-distance", type=float, default=None, help="この距離以上のドキュメントを除外")
 @click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
-def rag_query(query: str, limit: int, no_llm: bool, api_url: str) -> None:
-    payload = {"intent": "rag-query", "query": query, "limit": limit, "use_llm": not no_llm}
+def rag_query(query: str, limit: int, no_llm: bool, max_distance: float | None, api_url: str) -> None:
+    payload = {"intent": "rag-query", "query": query, "limit": limit, "use_llm": not no_llm, "max_distance": max_distance}
     base = _normalize_url(api_url)
     result = _api_call_with_fallback("POST", f"{base}/rag/query", f"{base}/envelopes/wait", payload=payload, timeout=60)
     click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))

@@ -67,6 +67,7 @@ class RagQueryRequest(BaseModel):
     query: str
     limit: int = 5
     use_llm: bool = True
+    max_distance: float | None = None
 
 
 app = FastAPI(title="AI Agent Hub API")
@@ -314,7 +315,11 @@ def rag_index(request: RagIndexRequest) -> dict[str, Any]:
 
 @app.post("/rag/query")
 def rag_query(request: RagQueryRequest) -> dict[str, Any]:
-    docs = _get_rag_store().search(query=request.query, limit=request.limit)
+    docs = _get_rag_store().search(
+        query=request.query,
+        limit=request.limit,
+        max_distance=request.max_distance,
+    )
     sources = [
         {
             "id": item["id"],
@@ -327,6 +332,8 @@ def rag_query(request: RagQueryRequest) -> dict[str, Any]:
 
     response: dict[str, Any] = {"sources": sources, "query": request.query}
     if request.use_llm:
+        if not docs:
+            return {"answer": "関連するドキュメントが見つかりませんでした", "sources": [], "query": request.query}
         context = "\n".join(f"{idx + 1}. {item['content']}" for idx, item in enumerate(docs))
         prompt = (
             "以下のコンテキストを参照して質問に答えてください。\n\n"
