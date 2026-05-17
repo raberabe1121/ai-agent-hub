@@ -407,13 +407,18 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, chunk
             raise click.ClickException("Markdownをセクション分割しましたが、インデックス可能な本文がありません")
 
         indexed: list[dict[str, Any]] = []
+        filtered_chunks = [(title, body) for title, body in chunks if _is_meaningful_chunk(body)]
+        title_totals: dict[str, int] = {}
+        for title, _ in filtered_chunks:
+            title_totals[title] = title_totals.get(title, 0) + 1
+
         title_counts: dict[str, int] = {}
-        for title, body in chunks:
-            if not _is_meaningful_chunk(body):
-                continue
+        for title, body in filtered_chunks:
             title_counts[title] = title_counts.get(title, 0) + 1
-            suffix = title_counts[title]
-            chunk_source = f"{effective_source}#{title}-{suffix}"
+            if title_totals.get(title, 0) > 1:
+                chunk_source = f"{effective_source}#{title}-{title_counts[title]}"
+            else:
+                chunk_source = f"{effective_source}#{title}"
             payload = {
                 "intent": "rag-index",
                 "text": body,

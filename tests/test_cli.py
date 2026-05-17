@@ -246,9 +246,9 @@ intro intro intro intro intro intro intro intro intro intro
 
     assert result.exit_code == 0
     assert len(captured) == 3
-    assert captured[0]["source"] == "readme#document-1"
-    assert captured[1]["source"] == "readme#セクションA-1"
-    assert captured[2]["source"] == "readme#セクションB-1"
+    assert captured[0]["source"] == "readme#document"
+    assert captured[1]["source"] == "readme#セクションA"
+    assert captured[2]["source"] == "readme#セクションB"
 
 
 def test_rag_index_chunk_by_section_with_h3(monkeypatch, tmp_path):
@@ -271,9 +271,9 @@ def test_rag_index_chunk_by_section_with_h3(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     assert len(captured) == 2
-    assert captured[0]["source"] == "readme#セクションA-1"
+    assert captured[0]["source"] == "readme#セクションA"
     assert captured[0]["embedding_text"].startswith("セクションA\n")
-    assert captured[1]["source"] == "readme#サブセクション-1"
+    assert captured[1]["source"] == "readme#サブセクション"
     assert captured[1]["embedding_text"].startswith("サブセクション\n")
 
 
