@@ -76,6 +76,53 @@ def _extract_reply_payload(reply: Any) -> Any:
     return reply
 
 
+def _truncate_preview(text: str, max_len: int = 100) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_len:
+        return normalized
+    return normalized[:max_len] + "..."
+
+
+def _render_rag_query_human(payload: dict[str, Any], *, no_llm: bool, query: str) -> str:
+    lines: list[str] = []
+    sources = payload.get("sources") if isinstance(payload.get("sources"), list) else []
+
+    if no_llm:
+        lines.append(f'📚 検索結果: "{query}"')
+        lines.append("")
+        for idx, source in enumerate(sources, start=1):
+            if not isinstance(source, dict):
+                continue
+            source_name = source.get("source") or "(unknown source)"
+            distance = source.get("distance")
+            distance_label = f"{float(distance):.2f}" if isinstance(distance, (int, float)) else "N/A"
+            content = source.get("content") if isinstance(source.get("content"), str) else ""
+            lines.append(f"  [{idx}] {source_name}  distance: {distance_label}")
+            lines.append(f"      {_truncate_preview(content)}")
+            lines.append("")
+        if not sources:
+            lines.append("  （結果なし）")
+        return "\n".join(lines).rstrip()
+
+    answer = payload.get("answer") if isinstance(payload.get("answer"), str) else ""
+    lines.append(f"💬 {query}")
+    lines.append("")
+    lines.append(answer or "（回答なし）")
+    lines.append("")
+    lines.append("📚 参照元:")
+    if sources:
+        for idx, source in enumerate(sources, start=1):
+            if not isinstance(source, dict):
+                continue
+            source_name = source.get("source") or "(unknown source)"
+            distance = source.get("distance")
+            distance_label = f"{float(distance):.2f}" if isinstance(distance, (int, float)) else "N/A"
+            lines.append(f"  [{idx}] {source_name}  distance: {distance_label}")
+    else:
+        lines.append("  （結果なし）")
+    return "\n".join(lines)
+
+
 def _api_call_with_fallback(method: str, primary_url: str, fallback_url: str, *, payload: dict[str, Any], timeout: int) -> Any:
     try:
         return _api_call(method, primary_url, payload=payload, timeout=timeout)
@@ -341,12 +388,20 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, chunk
 @click.option("--limit", type=int, default=5, show_default=True, help="検索件数")
 @click.option("--no-llm", is_flag=True, default=False, help="LLMを使わず検索結果のみ返す")
 @click.option("--max-distance", type=float, default=None, help="この距離以上のドキュメントを除外")
+@click.option("--json", "as_json", is_flag=True, default=False, help="JSON形式で出力する")
 @click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
-def rag_query(query: str, limit: int, no_llm: bool, max_distance: float | None, api_url: str) -> None:
+def rag_query(query: str, limit: int, no_llm: bool, max_distance: float | None, as_json: bool, api_url: str) -> None:
     payload = {"intent": "rag-query", "query": query, "limit": limit, "use_llm": not no_llm, "max_distance": max_distance}
     base = _normalize_url(api_url)
     result = _api_call_with_fallback("POST", f"{base}/rag/query", f"{base}/envelopes/wait", payload=payload, timeout=60)
-    click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
+    reply_payload = _extract_reply_payload(result)
+    if as_json:
+        click.echo(json.dumps(reply_payload, ensure_ascii=False))
+        return
+    if not isinstance(reply_payload, dict):
+        click.echo(json.dumps(reply_payload, ensure_ascii=False))
+        return
+    click.echo(_render_rag_query_human(reply_payload, no_llm=no_llm, query=query))
 
 
 if __name__ == "__main__":

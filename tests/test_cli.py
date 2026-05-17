@@ -248,3 +248,57 @@ b
     assert len(captured) == 3
     assert captured[1]["source"] == "readme#セクションA"
     assert captured[2]["source"] == "readme#セクションB"
+
+
+def test_rag_query_human_output_with_answer(monkeypatch):
+    def fake_api_call(method, url, **kwargs):
+        return {
+            "query": "承認フローについて",
+            "answer": "Human-in-the-loopで承認フローを強制できます。",
+            "sources": [
+                {"source": "readme#RAG（知識ベース検索）", "distance": 3.02, "content": "aaa"},
+                {"source": "readme#開発者体験", "distance": 3.71, "content": "bbb"},
+            ],
+        }
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-query", "--query", "承認フローについて"])
+
+    assert result.exit_code == 0
+    assert "💬 承認フローについて" in result.output
+    assert "📚 参照元:" in result.output
+    assert "distance: 3.02" in result.output
+
+
+def test_rag_query_human_output_no_llm(monkeypatch):
+    def fake_api_call(method, url, **kwargs):
+        return {
+            "query": "承認フローについて",
+            "sources": [
+                {"source": "readme#RAG（知識ベース検索）", "distance": 3.02, "content": "x" * 140},
+            ],
+        }
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-query", "--query", "承認フローについて", "--no-llm"])
+
+    assert result.exit_code == 0
+    assert '📚 検索結果: "承認フローについて"' in result.output
+    assert "distance: 3.02" in result.output
+    assert "..." in result.output
+
+
+def test_rag_query_json_output(monkeypatch):
+    payload = {"query": "q", "sources": []}
+
+    def fake_api_call(method, url, **kwargs):
+        return payload
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-query", "--query", "q", "--json"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == '{"query": "q", "sources": []}'
