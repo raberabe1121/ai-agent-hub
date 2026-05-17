@@ -55,7 +55,7 @@ class RAGStore:
         conn = self._get_conn()
         try:
             conn.execute("DROP TABLE IF EXISTS vec_documents")
-            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[384], distance_metric=cosine)")
+            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[384])")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS rag_documents (
@@ -88,9 +88,25 @@ class RAGStore:
         vec = list(model.embed([text]))[0]
         return [float(v) for v in vec.tolist()]
 
+    def _normalize(self, vec: list[float]) -> list[float]:
+        try:
+            import numpy as np
+
+            arr = np.array(vec, dtype=np.float32)
+            norm = np.linalg.norm(arr)
+            if norm > 0:
+                arr = arr / norm
+            return arr.tolist()
+        except Exception:
+            length = sum(v * v for v in vec) ** 0.5
+            if length <= 0:
+                return vec
+            return [float(v / length) for v in vec]
+
     def add_document(self, content: str, source: str | None = None, metadata: dict[str, Any] | None = None) -> int:
         self._ensure_tables()
         embedding = self._get_embedding(content)
+        embedding = self._normalize(embedding)
         metadata_json = json.dumps(metadata, ensure_ascii=False) if metadata is not None else None
         conn = self._get_conn()
         try:
@@ -108,6 +124,7 @@ class RAGStore:
     def search(self, query: str, limit: int = 5, max_distance: float | None = None) -> list[dict[str, Any]]:
         self._ensure_tables()
         embedding = self._get_embedding(query)
+        embedding = self._normalize(embedding)
         k = max(1, int(limit))
         conn = self._get_conn()
         try:
