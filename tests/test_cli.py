@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 from click.testing import CliRunner
 
 from ai_agent_hub import cli
@@ -166,3 +168,57 @@ def test_rag_query_calls_rag_endpoint(monkeypatch):
     assert captured["method"] == "POST"
     assert captured["url"].endswith("/rag/query")
     assert captured["payload"]["use_llm"] is False
+
+
+def test_rag_index_reads_pdf(monkeypatch, tmp_path):
+    captured = {}
+
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_text("dummy", encoding="utf-8")
+
+    class FakePage:
+        def extract_text(self):
+            return "pdf content"
+
+    class FakeReader:
+        def __init__(self, _path):
+            self.pages = [FakePage()]
+
+    def fake_api_call(method, url, **kwargs):
+        captured["payload"] = kwargs.get("payload")
+        return {"status": "indexed", "doc_id": 1}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+    monkeypatch.setitem(sys.modules, "pypdf", types.SimpleNamespace(PdfReader=FakeReader))
+
+    result = runner.invoke(cli.main, ["rag-index", "--file", str(pdf_path)])
+
+    assert result.exit_code == 0
+    assert captured["payload"]["text"] == "pdf content"
+
+
+def test_rag_index_reads_docx(monkeypatch, tmp_path):
+    captured = {}
+
+    docx_path = tmp_path / "doc.docx"
+    docx_path.write_text("dummy", encoding="utf-8")
+
+    class FakeParagraph:
+        def __init__(self, text):
+            self.text = text
+
+    class FakeDoc:
+        def __init__(self, _path):
+            self.paragraphs = [FakeParagraph("line1"), FakeParagraph("line2")]
+
+    def fake_api_call(method, url, **kwargs):
+        captured["payload"] = kwargs.get("payload")
+        return {"status": "indexed", "doc_id": 1}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+    monkeypatch.setitem(sys.modules, "docx", types.SimpleNamespace(Document=FakeDoc))
+
+    result = runner.invoke(cli.main, ["rag-index", "--file", str(docx_path)])
+
+    assert result.exit_code == 0
+    assert captured["payload"]["text"] == "line1\nline2"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
@@ -252,6 +253,27 @@ def intents(api_url: str) -> None:
             click.echo(f"  {name}")
 
 
+def _read_rag_index_file(file_path: str) -> str:
+    suffix = Path(file_path).suffix.lower()
+
+    if suffix in {".txt", ".md"}:
+        return click.open_file(file_path, mode="r", encoding="utf-8").read()
+
+    if suffix == ".pdf":
+        from pypdf import PdfReader
+
+        reader = PdfReader(file_path)
+        return "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+
+    if suffix == ".docx":
+        from docx import Document
+
+        doc = Document(file_path)
+        return "\n".join(paragraph.text for paragraph in doc.paragraphs).strip()
+
+    raise click.ClickException("未対応のファイル形式です。対応: .txt .md .pdf .docx")
+
+
 @main.command("rag-index")
 @click.option("--text", type=str, default=None, help="インデックスするテキスト")
 @click.option("--file", "file_path", type=click.Path(exists=True), default=None, help="インデックスするファイル")
@@ -265,7 +287,7 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, api_u
 
     content = text
     if file_path:
-        content = click.open_file(file_path, mode="r", encoding="utf-8").read()
+        content = _read_rag_index_file(file_path)
         if not source:
             source = file_path
 
