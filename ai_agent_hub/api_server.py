@@ -16,11 +16,21 @@ from pydantic import BaseModel
 from ai_agent_hub import Envelope
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
+from ai_agent_hub.rag import RAGStore
+import ai_agent_hub.agent_worker as agent_worker
 
 
 QUEUE_DIR = Path(os.environ.get("AI_AGENT_HUB_QUEUE_DIR", "./queue"))
 PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed"))
 REPLIES_DIR = Path(os.environ.get("AI_AGENT_HUB_REPLIES_DIR", "./replies"))
+RAG_STORE: RAGStore | None = None
+
+
+def _get_rag_store() -> RAGStore:
+    global RAG_STORE
+    if RAG_STORE is None:
+        RAG_STORE = RAGStore(os.environ.get("AI_AGENT_HUB_DB_PATH", "agent_hub.db"))
+    return RAG_STORE
 
 
 class EnvelopeRequest(BaseModel):
@@ -45,6 +55,19 @@ class ApprovalCreateRequest(BaseModel):
     approver: str
     callback: dict[str, Any]
     thread_id: str | None = None
+
+
+class RagIndexRequest(BaseModel):
+    text: str
+    source: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class RagQueryRequest(BaseModel):
+    query: str
+    limit: int = 5
+    use_llm: bool = True
+    max_distance: float | None = None
 
 
 app = FastAPI(title="AI Agent Hub API")
@@ -281,6 +304,54 @@ def reject_request(approval_id: str, request: RejectRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+
+
+
+@app.post("/rag/index")
+def rag_index(request: RagIndexRequest) -> dict[str, Any]:
+    doc_id = _get_rag_store().add_document(content=request.text, source=request.source, metadata=request.metadata)
+    return {"status": "indexed", "doc_id": doc_id, "source": request.source}
+
+
+@app.post("/rag/query")
+def rag_query(request: RagQueryRequest) -> dict[str, Any]:
+    docs = _get_rag_store().search(
+        query=request.query,
+        limit=request.limit,
+        max_distance=request.max_distance,
+    )
+    sources = [
+        {
+            "id": item["id"],
+            "content": item["content"],
+            "source": item.get("source"),
+            "distance": item.get("distance"),
+        }
+        for item in docs
+    ]
+
+    response: dict[str, Any] = {"sources": sources, "query": request.query}
+    if request.use_llm:
+        if not docs:
+            return {"answer": "関連するドキュメントが見つかりませんでした", "sources": [], "query": request.query}
+        context = "\n".join(f"{idx + 1}. {item['content']}" for idx, item in enumerate(docs))
+        prompt = (
+            "以下のコンテキストを参照して質問に答えてください。\n\n"
+            f"コンテキスト:\n{context}\n\n"
+            f"質問: {request.query}"
+        )
+        llm_env = Envelope.new(
+            envelope_type="command",
+            sender="https://user.local/@me",
+            recipient="https://ai-agent.local/@worker",
+            payload={"intent": "llm-query", "text": prompt},
+        )
+        llm_result = agent_worker._handle_llm_query(llm_env)
+        if isinstance(llm_result, dict) and isinstance(llm_result.get("result"), str):
+            response["answer"] = llm_result["result"]
+        else:
+            response["answer"] = ""
+    return response
 
 @app.get("/health")
 def health() -> dict[str, Any]:
