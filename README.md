@@ -214,14 +214,14 @@ API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](https:
 ```
 テキスト入力
     ↓
-fastembed（BAAI/bge-small-en-v1.5）
-    ↓ 384次元ベクトルに変換
-sqlite-vec（SQLite拡張）
+fastembed（paraphrase-multilingual-MiniLM-L12-v2）
+    ↓ 384次元ベクトルに変換（50言語対応・日本語含む）
+sqlite-vec（SQLite拡張 vec0仮想テーブル）
     ↓ KNN検索（コサイン距離）
-関連ドキュメントを取得
+distance閾値でフィルタ（--max-distance）
     ↓ use_llm=trueの場合
 Ollama Cloud（gemma3:4b等）
-    ↓ コンテキストを与えて回答生成
+    ↓ 関連ドキュメントのみをコンテキストとして回答生成
 回答を返す
 ```
 
@@ -230,18 +230,22 @@ Ollama Cloud（gemma3:4b等）
 | 項目 | 内容 |
 | --- | --- |
 | Embeddingライブラリ | [fastembed](https://github.com/qdrant/fastembed) v0.8.0 |
-| Embeddingモデル | `BAAI/bge-small-en-v1.5`（384次元、~50MB） |
+| Embeddingモデル | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`（384次元、~250MB、50言語対応） |
 | ベクトルDB | [sqlite-vec](https://github.com/asg017/sqlite-vec) v0.1.9（SQLite拡張） |
 | 距離関数 | コサイン距離（vec0仮想テーブル） |
 | ストレージ | 既存の`agent_hub.db`に統合（追加DBファイル不要） |
-| メモリ使用量 | Embeddingモデル ~200MB（950MB RAM環境で動作確認済み） |
+| メモリ使用量 | Embeddingモデル ~250MB（950MB RAM環境で動作確認済み） |
 
 ### 設計上の選択理由
 
 **なぜfastembedか**
 - `pip install fastembed`だけで完結。ONNXランタイム内蔵のため追加サービス不要
-- `BAAI/bge-small-en-v1.5`はモデルサイズ50MBと軽量ながら多言語対応
 - Ollama Cloud embed APIが利用不可だったため（`unauthorized`エラー）、ローカル完結を選択
+
+**なぜparaphrase-multilingual-MiniLM-L12-v2か**
+- Microsoft MiniLMアーキテクチャをベースに50言語で学習した多言語対応モデル
+- 英語特化モデル（`bge-small-en`）では日本語の意味的類似度が正しく計算されなかった（無関係な文が1位になるケースが発生）
+- このモデルに変更後、「承認フローについて教えて」→「Human-in-the-loopで承認フローを強制できます」が正しく1位になることを確認済み
 
 **なぜsqlite-vecか**
 - 既存の`agent_hub.db`（SQLite）に`vec0`仮想テーブルを追加するだけで導入可能
@@ -259,17 +263,35 @@ hub rag-index --file ./docs/policy.txt --source "policy"
 hub rag-query --query "承認フローについて教えて"
 # → {
 #     "answer": "Human-in-the-loopで承認フローを強制できます...",
-#     "sources": [{"content": "...", "source": "readme", "distance": 0.71}],
+#     "sources": [{"content": "...", "source": "readme", "distance": 3.02}],
 #     "query": "承認フローについて教えて"
 #   }
+
+# distance閾値で無関係なドキュメントを除外（推奨）
+# distanceが小さいほど意味的に近い。閾値以上のドキュメントはLLMに渡さない
+hub rag-query --query "承認フローについて教えて" --max-distance 3.5
+# → 承認フロー関連のドキュメントのみでLLMが回答を生成
 
 # 検索結果のみ（LLMなし・高速）
 hub rag-query --query "承認フローについて" --limit 3 --no-llm
 # → {
-#     "sources": [{"content": "...", "source": "readme", "distance": 0.71}],
+#     "sources": [{"content": "...", "source": "readme", "distance": 3.02}],
 #     "query": "承認フローについて"
 #   }
 ```
+
+### --max-distanceの目安
+
+distanceはコサイン距離で、値が小さいほど意味的に近いドキュメントです。
+
+| distance | 意味 |
+| --- | --- |
+| 0〜2.0 | 非常に近い（ほぼ同じ意味） |
+| 2.0〜3.5 | 関連あり |
+| 3.5〜5.0 | やや遠い（関連が薄い） |
+| 5.0以上 | ほぼ無関係 |
+
+`--max-distance 3.5`を基本として、ドメインに合わせて調整してください。
 
 ### REST API
 
@@ -280,10 +302,10 @@ curl -X POST http://localhost:8080/rag/index \
   -d '{"text": "ドキュメントの内容", "source": "出典名"}'
 # → {"status": "indexed", "doc_id": 1, "source": "出典名"}
 
-# 検索
+# 検索（max_distanceで足切り）
 curl -X POST http://localhost:8080/rag/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "質問内容", "limit": 5, "use_llm": true}'
+  -d '{"query": "質問内容", "limit": 5, "use_llm": true, "max_distance": 3.5}'
 ```
 
 ---
