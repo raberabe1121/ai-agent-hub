@@ -352,11 +352,15 @@ env = Envelope.new(
 
 ### ① 横断的なエージェント管理
 
+複数のエージェントがEnvelopeを介して連携します。各エージェントは役割を持ち、順番に処理を引き継ぎます。
+
 ```
 RequestAgent → PolicyAgent → HumanApprovalAgent → ExecutionAgent
 ```
 
 ### ② 権限・ポリシー制御
+
+X-Agent-Policyヘッダーで承認ルールを定義します。金額や条件に応じて自動的にポリシーを適用し、Human-in-the-loopによる承認を強制できます。
 
 ```
 X-Agent-Policy: human-approval-required=true; amount-jpy=150000
@@ -377,6 +381,8 @@ hub logs
 
 ### ④ Human-in-the-loop
 
+承認フローを人間が制御します。承認待ち一覧を確認し、承認または却下できます。`hub pending`で承認待ちのEnvelopeを一覧表示し、`hub approve`または`hub reject`で承認・却下します。
+
 ```bash
 hub pending
 # → 承認待ち: 1件 [7698e25a] 海外出張経費 ¥150,000
@@ -386,6 +392,8 @@ hub approve 7698e25a
 ```
 
 ### ⑤ 長期状態管理・DLQ・リトライ
+
+処理に失敗したEnvelopeはDead Letter Queueに移動し、リトライされます。PostfixがMTAとしてキューを保持するため、システムダウン中もメッセージは消えません。
 
 ```
 処理失敗 → DLQ移動 → リトライ → 成功
