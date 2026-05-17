@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
@@ -24,6 +25,8 @@ DEFAULT_INTENTS: list[tuple[str, str]] = [
     ("reject", "却下する"),
     ("payment", "USDC決済を実行する"),
     ("entropy-check", "エントロピーを計算する"),
+    ("rag-index", "RAGにドキュメントを登録する"),
+    ("rag-query", "RAGを検索して回答する"),
 ]
 
 
@@ -71,6 +74,63 @@ def _extract_reply_payload(reply: Any) -> Any:
     if isinstance(reply, dict) and "payload" in reply:
         return reply["payload"]
     return reply
+
+
+def _truncate_preview(text: str, max_len: int = 100) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_len:
+        return normalized
+    return normalized[:max_len] + "..."
+
+
+def _render_rag_query_human(payload: dict[str, Any], *, no_llm: bool, query: str) -> str:
+    lines: list[str] = []
+    sources = payload.get("sources") if isinstance(payload.get("sources"), list) else []
+
+    if no_llm:
+        lines.append(f'📚 検索結果: "{query}"')
+        lines.append("")
+        for idx, source in enumerate(sources, start=1):
+            if not isinstance(source, dict):
+                continue
+            source_name = source.get("source") or "(unknown source)"
+            distance = source.get("distance")
+            distance_label = f"{float(distance):.2f}" if isinstance(distance, (int, float)) else "N/A"
+            content = source.get("content") if isinstance(source.get("content"), str) else ""
+            lines.append(f"  [{idx}] {source_name}  distance: {distance_label}")
+            lines.append(f"      {_truncate_preview(content)}")
+            lines.append("")
+        if not sources:
+            lines.append("  （結果なし）")
+        return "\n".join(lines).rstrip()
+
+    answer = payload.get("answer") if isinstance(payload.get("answer"), str) else ""
+    lines.append(f"💬 {query}")
+    lines.append("")
+    lines.append(answer or "（回答なし）")
+    lines.append("")
+    lines.append("📚 参照元:")
+    if sources:
+        for idx, source in enumerate(sources, start=1):
+            if not isinstance(source, dict):
+                continue
+            source_name = source.get("source") or "(unknown source)"
+            distance = source.get("distance")
+            distance_label = f"{float(distance):.2f}" if isinstance(distance, (int, float)) else "N/A"
+            lines.append(f"  [{idx}] {source_name}  distance: {distance_label}")
+    else:
+        lines.append("  （結果なし）")
+    return "\n".join(lines)
+
+
+def _api_call_with_fallback(method: str, primary_url: str, fallback_url: str, *, payload: dict[str, Any], timeout: int) -> Any:
+    try:
+        return _api_call(method, primary_url, payload=payload, timeout=timeout)
+    except click.ClickException as exc:
+        message = str(exc)
+        if "API error (404)" not in message:
+            raise
+        return _api_call(method, fallback_url, payload=payload, timeout=timeout)
 
 
 @click.group(help="AI Agent Hub CLI")
@@ -238,6 +298,110 @@ def intents(api_url: str) -> None:
             click.echo(f"  {name:<17} {description}")
         else:
             click.echo(f"  {name}")
+
+
+def _split_markdown_sections(content: str) -> list[tuple[str, str]]:
+    sections: list[tuple[str, str]] = []
+    current_title = "document"
+    current_lines: list[str] = []
+
+    for line in content.splitlines():
+        if line.startswith("## "):
+            body = "\n".join(current_lines).strip()
+            if body:
+                sections.append((current_title, body))
+            current_title = line[3:].strip() or "section"
+            current_lines = []
+            continue
+        current_lines.append(line)
+
+    body = "\n".join(current_lines).strip()
+    if body:
+        sections.append((current_title, body))
+    return sections
+
+
+def _read_rag_index_file(file_path: str) -> str:
+    suffix = Path(file_path).suffix.lower()
+
+    if suffix in {".txt", ".md"}:
+        return click.open_file(file_path, mode="r", encoding="utf-8").read()
+
+    if suffix == ".pdf":
+        from pypdf import PdfReader
+
+        reader = PdfReader(file_path)
+        return "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+
+    if suffix == ".docx":
+        from docx import Document
+
+        doc = Document(file_path)
+        return "\n".join(paragraph.text for paragraph in doc.paragraphs).strip()
+
+    raise click.ClickException("未対応のファイル形式です。対応: .txt .md .pdf .docx")
+
+
+@main.command("rag-index")
+@click.option("--text", type=str, default=None, help="インデックスするテキスト")
+@click.option("--file", "file_path", type=click.Path(exists=True), default=None, help="インデックスするファイル")
+@click.option("--source", type=str, default=None, help="ソース名")
+@click.option("--chunk-by-section", is_flag=True, default=False, help="Markdownの##見出しごとに分割してインデックス")
+@click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
+def rag_index(text: str | None, file_path: str | None, source: str | None, chunk_by_section: bool, api_url: str) -> None:
+    if not text and not file_path:
+        raise click.ClickException("--text または --file のどちらかが必要です")
+    if text and file_path:
+        raise click.ClickException("--text と --file は同時に指定できません")
+
+    content = text
+    if file_path:
+        content = _read_rag_index_file(file_path)
+        if not source:
+            source = file_path
+
+    base = _normalize_url(api_url)
+
+    if chunk_by_section and file_path and Path(file_path).suffix.lower() == ".md":
+        effective_source = source or file_path
+        chunks = _split_markdown_sections(content or "")
+        if not chunks:
+            raise click.ClickException("Markdownをセクション分割しましたが、インデックス可能な本文がありません")
+
+        indexed: list[dict[str, Any]] = []
+        for title, body in chunks:
+            chunk_source = f"{effective_source}#{title}"
+            payload = {"intent": "rag-index", "text": body, "source": chunk_source}
+            result = _api_call_with_fallback("POST", f"{base}/rag/index", f"{base}/envelopes/wait", payload=payload, timeout=60)
+            indexed.append(_extract_reply_payload(result))
+
+        click.echo(json.dumps({"status": "indexed", "count": len(indexed), "items": indexed}, ensure_ascii=False))
+        return
+
+    payload = {"intent": "rag-index", "text": content, "source": source}
+    result = _api_call_with_fallback("POST", f"{base}/rag/index", f"{base}/envelopes/wait", payload=payload, timeout=60)
+    click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
+
+
+@main.command("rag-query")
+@click.option("--query", required=True, type=str, help="検索クエリ")
+@click.option("--limit", type=int, default=5, show_default=True, help="検索件数")
+@click.option("--no-llm", is_flag=True, default=False, help="LLMを使わず検索結果のみ返す")
+@click.option("--max-distance", type=float, default=None, help="この距離以上のドキュメントを除外")
+@click.option("--json", "as_json", is_flag=True, default=False, help="JSON形式で出力する")
+@click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
+def rag_query(query: str, limit: int, no_llm: bool, max_distance: float | None, as_json: bool, api_url: str) -> None:
+    payload = {"intent": "rag-query", "query": query, "limit": limit, "use_llm": not no_llm, "max_distance": max_distance}
+    base = _normalize_url(api_url)
+    result = _api_call_with_fallback("POST", f"{base}/rag/query", f"{base}/envelopes/wait", payload=payload, timeout=60)
+    reply_payload = _extract_reply_payload(result)
+    if as_json:
+        click.echo(json.dumps(reply_payload, ensure_ascii=False))
+        return
+    if not isinstance(reply_payload, dict):
+        click.echo(json.dumps(reply_payload, ensure_ascii=False))
+        return
+    click.echo(_render_rag_query_human(reply_payload, no_llm=no_llm, query=query))
 
 
 if __name__ == "__main__":
