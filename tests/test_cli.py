@@ -222,3 +222,29 @@ def test_rag_index_reads_docx(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     assert captured["payload"]["text"] == "line1\nline2"
+
+
+def test_rag_index_chunk_by_section_markdown(monkeypatch, tmp_path):
+    captured = []
+
+    md_path = tmp_path / "README.md"
+    md_path.write_text("""# title
+intro
+## セクションA
+a
+## セクションB
+b
+""", encoding="utf-8")
+
+    def fake_api_call(method, url, **kwargs):
+        captured.append(kwargs.get("payload"))
+        return {"status": "indexed", "doc_id": len(captured), "source": kwargs.get("payload", {}).get("source")}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-index", "--file", str(md_path), "--source", "readme", "--chunk-by-section"])
+
+    assert result.exit_code == 0
+    assert len(captured) == 3
+    assert captured[1]["source"] == "readme#セクションA"
+    assert captured[2]["source"] == "readme#セクションB"

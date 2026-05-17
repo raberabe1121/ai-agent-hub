@@ -253,6 +253,27 @@ def intents(api_url: str) -> None:
             click.echo(f"  {name}")
 
 
+def _split_markdown_sections(content: str) -> list[tuple[str, str]]:
+    sections: list[tuple[str, str]] = []
+    current_title = "document"
+    current_lines: list[str] = []
+
+    for line in content.splitlines():
+        if line.startswith("## "):
+            body = "\n".join(current_lines).strip()
+            if body:
+                sections.append((current_title, body))
+            current_title = line[3:].strip() or "section"
+            current_lines = []
+            continue
+        current_lines.append(line)
+
+    body = "\n".join(current_lines).strip()
+    if body:
+        sections.append((current_title, body))
+    return sections
+
+
 def _read_rag_index_file(file_path: str) -> str:
     suffix = Path(file_path).suffix.lower()
 
@@ -278,8 +299,9 @@ def _read_rag_index_file(file_path: str) -> str:
 @click.option("--text", type=str, default=None, help="インデックスするテキスト")
 @click.option("--file", "file_path", type=click.Path(exists=True), default=None, help="インデックスするファイル")
 @click.option("--source", type=str, default=None, help="ソース名")
+@click.option("--chunk-by-section", is_flag=True, default=False, help="Markdownの##見出しごとに分割してインデックス")
 @click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
-def rag_index(text: str | None, file_path: str | None, source: str | None, api_url: str) -> None:
+def rag_index(text: str | None, file_path: str | None, source: str | None, chunk_by_section: bool, api_url: str) -> None:
     if not text and not file_path:
         raise click.ClickException("--text または --file のどちらかが必要です")
     if text and file_path:
@@ -291,8 +313,25 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, api_u
         if not source:
             source = file_path
 
-    payload = {"intent": "rag-index", "text": content, "source": source}
     base = _normalize_url(api_url)
+
+    if chunk_by_section and file_path and Path(file_path).suffix.lower() == ".md":
+        effective_source = source or file_path
+        chunks = _split_markdown_sections(content or "")
+        if not chunks:
+            raise click.ClickException("Markdownをセクション分割しましたが、インデックス可能な本文がありません")
+
+        indexed: list[dict[str, Any]] = []
+        for title, body in chunks:
+            chunk_source = f"{effective_source}#{title}"
+            payload = {"intent": "rag-index", "text": body, "source": chunk_source}
+            result = _api_call_with_fallback("POST", f"{base}/rag/index", f"{base}/envelopes/wait", payload=payload, timeout=60)
+            indexed.append(_extract_reply_payload(result))
+
+        click.echo(json.dumps({"status": "indexed", "count": len(indexed), "items": indexed}, ensure_ascii=False))
+        return
+
+    payload = {"intent": "rag-index", "text": content, "source": source}
     result = _api_call_with_fallback("POST", f"{base}/rag/index", f"{base}/envelopes/wait", payload=payload, timeout=60)
     click.echo(json.dumps(_extract_reply_payload(result), ensure_ascii=False))
 
