@@ -26,6 +26,7 @@ from ai_agent_hub.lmtp_handler import (
 )
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
+from ai_agent_hub.rag import RAGStore
 
 WORKER_ENV_FILES = (
     Path(".env"),
@@ -549,6 +550,94 @@ def _llm_json_response(prompt: str, model: str = "gemma3:4b") -> dict[str, Any]:
         return {}
     return _extract_json_object(result_text) or {}
 
+
+
+
+def _get_rag_store() -> RAGStore:
+    db_path = os.environ.get("AI_AGENT_HUB_DB_PATH", "agent_hub.db")
+    return RAGStore(db_path)
+
+
+@intent_handler("rag-index")
+def _handle_rag_index(env: Envelope) -> dict[str, Any]:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    text = env.payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return {"error": "payload.text is required"}
+
+    source = env.payload.get("source")
+    metadata = env.payload.get("metadata")
+    embedding_text = env.payload.get("embedding_text")
+    if source is not None and not isinstance(source, str):
+        return {"error": "payload.source must be a string"}
+    if metadata is not None and not isinstance(metadata, dict):
+        return {"error": "payload.metadata must be a dict"}
+    if embedding_text is not None and not isinstance(embedding_text, str):
+        return {"error": "payload.embedding_text must be a string"}
+
+    store = _get_rag_store()
+    if embedding_text is not None:
+        doc_id = store.add_document(content=text, source=source, metadata=metadata, embedding_text=embedding_text)
+    else:
+        doc_id = store.add_document(content=text, source=source, metadata=metadata)
+    return {"status": "indexed", "doc_id": doc_id, "source": source}
+
+
+@intent_handler("rag-query")
+def _handle_rag_query(env: Envelope) -> dict[str, Any]:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    query = env.payload.get("query")
+    if not isinstance(query, str) or not query.strip():
+        return {"error": "payload.query is required"}
+
+    limit = env.payload.get("limit", 5)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 5
+
+    use_llm = env.payload.get("use_llm", True)
+    if not isinstance(use_llm, bool):
+        use_llm = True
+
+    docs = _get_rag_store().search(query=query, limit=limit)
+    sources = [
+        {
+            "id": item["id"],
+            "content": item["content"],
+            "source": item.get("source"),
+            "distance": item.get("distance"),
+        }
+        for item in docs
+    ]
+
+    response: dict[str, Any] = {"sources": sources, "query": query}
+    if use_llm:
+        context = "\n".join(f"{idx + 1}. {item['content']}" for idx, item in enumerate(docs))
+        prompt = (
+            "以下のコンテキストを参照して質問に答えてください。\n\n"
+            f"コンテキスト:\n{context}\n\n"
+            f"質問: {query}"
+        )
+        llm_env = Envelope.new(
+            envelope_type="command",
+            sender=env.sender,
+            recipient=env.recipient,
+            payload={"intent": "llm-query", "text": prompt},
+        )
+        llm_result = _handle_llm_query(llm_env)
+        if isinstance(llm_result, dict) and isinstance(llm_result.get("result"), str):
+            response["answer"] = llm_result["result"]
+        else:
+            response["answer"] = ""
+            if isinstance(llm_result, dict) and llm_result.get("error"):
+                response["error"] = llm_result["error"]
+
+    return response
 
 @intent_handler("threat-scan")
 def _handle_threat_scan(env: Envelope) -> dict[str, Any]:
