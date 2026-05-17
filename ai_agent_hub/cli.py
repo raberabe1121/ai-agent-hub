@@ -300,6 +300,16 @@ def intents(api_url: str) -> None:
             click.echo(f"  {name}")
 
 
+def _is_meaningful_chunk(text: str, min_chars: int = 50) -> bool:
+    normalized = " ".join(text.split())
+    if len(normalized) < min_chars:
+        return False
+    stripped = normalized.replace("-", "").replace("_", "").replace("*", "").replace("=", "").replace("#", "")
+    if not stripped.strip():
+        return False
+    return any(ch.isalnum() for ch in stripped)
+
+
 def _split_markdown_sections(content: str, max_chunk_chars: int = 500) -> list[tuple[str, str]]:
     sections: list[tuple[str, str]] = []
     current_title = "document"
@@ -397,11 +407,19 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, chunk
             raise click.ClickException("Markdownをセクション分割しましたが、インデックス可能な本文がありません")
 
         indexed: list[dict[str, Any]] = []
+        title_counts: dict[str, int] = {}
         for title, body in chunks:
-            chunk_source = f"{effective_source}#{title}"
+            if not _is_meaningful_chunk(body):
+                continue
+            title_counts[title] = title_counts.get(title, 0) + 1
+            suffix = title_counts[title]
+            chunk_source = f"{effective_source}#{title}-{suffix}"
             payload = {"intent": "rag-index", "text": body, "source": chunk_source}
             result = _api_call_with_fallback("POST", f"{base}/rag/index", f"{base}/envelopes/wait", payload=payload, timeout=60)
             indexed.append(_extract_reply_payload(result))
+
+        if not indexed:
+            raise click.ClickException("有効なチャンクがありません（短すぎるか記号のみ）")
 
         click.echo(json.dumps({"status": "indexed", "count": len(indexed), "items": indexed}, ensure_ascii=False))
         return

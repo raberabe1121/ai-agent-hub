@@ -229,11 +229,11 @@ def test_rag_index_chunk_by_section_markdown(monkeypatch, tmp_path):
 
     md_path = tmp_path / "README.md"
     md_path.write_text("""# title
-intro
+intro intro intro intro intro intro intro intro intro intro
 ## セクションA
-a
+    セクションAの説明文です。セクションAの説明文です。セクションAの説明文です。セクションAの説明文です。セクションAの説明文です。
 ## セクションB
-b
+    セクションBの説明文です。セクションBの説明文です。セクションBの説明文です。セクションBの説明文です。セクションBの説明文です。
 """, encoding="utf-8")
 
     def fake_api_call(method, url, **kwargs):
@@ -246,8 +246,9 @@ b
 
     assert result.exit_code == 0
     assert len(captured) == 3
-    assert captured[1]["source"] == "readme#セクションA"
-    assert captured[2]["source"] == "readme#セクションB"
+    assert captured[0]["source"] == "readme#document-1"
+    assert captured[1]["source"] == "readme#セクションA-1"
+    assert captured[2]["source"] == "readme#セクションB-1"
 
 
 def test_rag_index_chunk_by_section_with_h3(monkeypatch, tmp_path):
@@ -255,9 +256,9 @@ def test_rag_index_chunk_by_section_with_h3(monkeypatch, tmp_path):
 
     md_path = tmp_path / "README_h3.md"
     md_path.write_text("""## セクションA
-a
+セクションAの説明文です。セクションAの説明文です。セクションAの説明文です。セクションAの説明文です。セクションAの説明文です。
 ### サブセクション
-a2
+サブセクションの説明文です。サブセクションの説明文です。サブセクションの説明文です。サブセクションの説明文です。サブセクションの説明文です。
 """, encoding="utf-8")
 
     def fake_api_call(method, url, **kwargs):
@@ -270,8 +271,8 @@ a2
 
     assert result.exit_code == 0
     assert len(captured) == 2
-    assert captured[0]["source"] == "readme#セクションA"
-    assert captured[1]["source"] == "readme#サブセクション"
+    assert captured[0]["source"] == "readme#セクションA-1"
+    assert captured[1]["source"] == "readme#サブセクション-1"
 
 
 def test_rag_query_human_output_with_answer(monkeypatch):
@@ -346,5 +347,34 @@ def test_rag_index_chunk_by_section_splits_large_section_by_paragraph(monkeypatc
 
     assert result.exit_code == 0
     assert len(captured) == 2
-    assert all(item["source"] == "readme#長い章" for item in captured)
+    assert captured[0]["source"] == "readme#長い章-1"
+    assert captured[1]["source"] == "readme#長い章-2"
     assert all(len(item["text"]) <= 500 for item in captured)
+
+
+def test_rag_index_chunk_by_section_skips_short_or_symbol_chunks(monkeypatch, tmp_path):
+    captured = []
+
+    md_path = tmp_path / "README_noise.md"
+    md_path.write_text("""## 実装済み機能
+---
+
+## 実装済み機能
+これは十分に長い本文です。これは十分に長い本文です。これは十分に長い本文です。これは十分に長い本文です。これは十分に長い本文です。
+
+## 実装済み機能
+これも十分に長い本文です。これも十分に長い本文です。これも十分に長い本文です。これも十分に長い本文です。これも十分に長い本文です。
+""", encoding="utf-8")
+
+    def fake_api_call(method, url, **kwargs):
+        captured.append(kwargs.get("payload"))
+        return {"status": "indexed", "doc_id": len(captured), "source": kwargs.get("payload", {}).get("source")}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-index", "--file", str(md_path), "--source", "readme", "--chunk-by-section"])
+
+    assert result.exit_code == 0
+    assert len(captured) == 2
+    assert captured[0]["source"] == "readme#実装済み機能-1"
+    assert captured[1]["source"] == "readme#実装済み機能-2"
