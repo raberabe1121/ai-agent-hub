@@ -250,6 +250,30 @@ b
     assert captured[2]["source"] == "readme#セクションB"
 
 
+def test_rag_index_chunk_by_section_with_h3(monkeypatch, tmp_path):
+    captured = []
+
+    md_path = tmp_path / "README_h3.md"
+    md_path.write_text("""## セクションA
+a
+### サブセクション
+a2
+""", encoding="utf-8")
+
+    def fake_api_call(method, url, **kwargs):
+        captured.append(kwargs.get("payload"))
+        return {"status": "indexed", "doc_id": len(captured), "source": kwargs.get("payload", {}).get("source")}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-index", "--file", str(md_path), "--source", "readme", "--chunk-by-section"])
+
+    assert result.exit_code == 0
+    assert len(captured) == 2
+    assert captured[0]["source"] == "readme#セクションA"
+    assert captured[1]["source"] == "readme#サブセクション"
+
+
 def test_rag_query_human_output_with_answer(monkeypatch):
     def fake_api_call(method, url, **kwargs):
         return {
@@ -302,3 +326,25 @@ def test_rag_query_json_output(monkeypatch):
 
     assert result.exit_code == 0
     assert result.output.strip() == '{"query": "q", "sources": []}'
+
+
+def test_rag_index_chunk_by_section_splits_large_section_by_paragraph(monkeypatch, tmp_path):
+    captured = []
+
+    md_path = tmp_path / "LONG.md"
+    para1 = "a" * 300
+    para2 = "b" * 300
+    md_path.write_text(f"## 長い章\n{para1}\n\n{para2}\n", encoding="utf-8")
+
+    def fake_api_call(method, url, **kwargs):
+        captured.append(kwargs.get("payload"))
+        return {"status": "indexed", "doc_id": len(captured)}
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-index", "--file", str(md_path), "--source", "readme", "--chunk-by-section"])
+
+    assert result.exit_code == 0
+    assert len(captured) == 2
+    assert all(item["source"] == "readme#長い章" for item in captured)
+    assert all(len(item["text"]) <= 500 for item in captured)

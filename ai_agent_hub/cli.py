@@ -300,24 +300,52 @@ def intents(api_url: str) -> None:
             click.echo(f"  {name}")
 
 
-def _split_markdown_sections(content: str) -> list[tuple[str, str]]:
+def _split_markdown_sections(content: str, max_chunk_chars: int = 500) -> list[tuple[str, str]]:
     sections: list[tuple[str, str]] = []
     current_title = "document"
     current_lines: list[str] = []
 
+    def _flush_section(title: str, lines: list[str]) -> None:
+        body = "\n".join(lines).strip()
+        if not body:
+            return
+        if len(body) <= max_chunk_chars:
+            sections.append((title, body))
+            return
+
+        paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
+        if not paragraphs:
+            sections.append((title, body))
+            return
+
+        acc = ""
+        for para in paragraphs:
+            candidate = para if not acc else f"{acc}\n\n{para}"
+            if len(candidate) <= max_chunk_chars:
+                acc = candidate
+                continue
+            if acc:
+                sections.append((title, acc))
+            if len(para) <= max_chunk_chars:
+                acc = para
+            else:
+                for i in range(0, len(para), max_chunk_chars):
+                    part = para[i : i + max_chunk_chars].strip()
+                    if part:
+                        sections.append((title, part))
+                acc = ""
+        if acc:
+            sections.append((title, acc))
+
     for line in content.splitlines():
-        if line.startswith("## "):
-            body = "\n".join(current_lines).strip()
-            if body:
-                sections.append((current_title, body))
-            current_title = line[3:].strip() or "section"
+        if line.startswith("## ") or line.startswith("### "):
+            _flush_section(current_title, current_lines)
+            current_title = line.lstrip("#").strip() or "section"
             current_lines = []
             continue
         current_lines.append(line)
 
-    body = "\n".join(current_lines).strip()
-    if body:
-        sections.append((current_title, body))
+    _flush_section(current_title, current_lines)
     return sections
 
 
