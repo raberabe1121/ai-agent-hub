@@ -77,7 +77,15 @@ def _extract_reply_payload(reply: Any) -> Any:
 
 
 def _truncate_preview(text: str, max_len: int = 100) -> str:
-    normalized = " ".join(text.split())
+    import re
+
+    normalized = text
+    normalized = re.sub(r"```[\s\S]*?```", " [コード例] ", normalized)
+    normalized = normalized.replace("**", "")
+    normalized = normalized.replace("###", "")
+    normalized = normalized.replace("##", "")
+    normalized = normalized.replace("`", "")
+    normalized = " ".join(normalized.split())
     if len(normalized) <= max_len:
         return normalized
     return normalized[:max_len] + "..."

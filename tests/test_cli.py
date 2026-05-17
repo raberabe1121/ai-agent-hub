@@ -380,3 +380,27 @@ def test_rag_index_chunk_by_section_skips_short_or_symbol_chunks(monkeypatch, tm
     assert len(captured) == 2
     assert captured[0]["source"] == "readme#実装済み機能-1"
     assert captured[1]["source"] == "readme#実装済み機能-2"
+
+
+def test_rag_query_no_llm_preview_sanitizes_markdown(monkeypatch):
+    def fake_api_call(method, url, **kwargs):
+        return {
+            "query": "q",
+            "sources": [
+                {
+                    "source": "readme#sec",
+                    "distance": 1.23,
+                    "content": "```bash\nhub logs\n```\n## 見出し **強調** `code`",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["rag-query", "--query", "q", "--no-llm"])
+
+    assert result.exit_code == 0
+    assert "[コード例]" in result.output
+    assert "```" not in result.output
+    assert "##" not in result.output
+    assert "**" not in result.output
