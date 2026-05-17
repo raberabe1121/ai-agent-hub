@@ -414,7 +414,12 @@ def rag_index(text: str | None, file_path: str | None, source: str | None, chunk
             title_counts[title] = title_counts.get(title, 0) + 1
             suffix = title_counts[title]
             chunk_source = f"{effective_source}#{title}-{suffix}"
-            payload = {"intent": "rag-index", "text": body, "source": chunk_source}
+            payload = {
+                "intent": "rag-index",
+                "text": body,
+                "source": chunk_source,
+                "embedding_text": f"{title}\n{body}",
+            }
             result = _api_call_with_fallback("POST", f"{base}/rag/index", f"{base}/envelopes/wait", payload=payload, timeout=60)
             indexed.append(_extract_reply_payload(result))
 

@@ -569,12 +569,19 @@ def _handle_rag_index(env: Envelope) -> dict[str, Any]:
 
     source = env.payload.get("source")
     metadata = env.payload.get("metadata")
+    embedding_text = env.payload.get("embedding_text")
     if source is not None and not isinstance(source, str):
         return {"error": "payload.source must be a string"}
     if metadata is not None and not isinstance(metadata, dict):
         return {"error": "payload.metadata must be a dict"}
+    if embedding_text is not None and not isinstance(embedding_text, str):
+        return {"error": "payload.embedding_text must be a string"}
 
-    doc_id = _get_rag_store().add_document(content=text, source=source, metadata=metadata)
+    store = _get_rag_store()
+    if embedding_text is not None:
+        doc_id = store.add_document(content=text, source=source, metadata=metadata, embedding_text=embedding_text)
+    else:
+        doc_id = store.add_document(content=text, source=source, metadata=metadata)
     return {"status": "indexed", "doc_id": doc_id, "source": source}
 
 

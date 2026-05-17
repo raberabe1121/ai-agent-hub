@@ -103,9 +103,10 @@ class RAGStore:
                 return vec
             return [float(v / length) for v in vec]
 
-    def add_document(self, content: str, source: str | None = None, metadata: dict[str, Any] | None = None) -> int:
+    def add_document(self, content: str, source: str | None = None, metadata: dict[str, Any] | None = None, embedding_text: str | None = None) -> int:
         self._ensure_tables()
-        embedding = self._get_embedding(content)
+        text_for_embedding = embedding_text if isinstance(embedding_text, str) and embedding_text else content
+        embedding = self._get_embedding(text_for_embedding)
         embedding = self._normalize(embedding)
         metadata_json = json.dumps(metadata, ensure_ascii=False) if metadata is not None else None
         conn = self._get_conn()

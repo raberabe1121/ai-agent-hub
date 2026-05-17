@@ -61,6 +61,7 @@ class RagIndexRequest(BaseModel):
     text: str
     source: str | None = None
     metadata: dict[str, Any] | None = None
+    embedding_text: str | None = None
 
 
 class RagQueryRequest(BaseModel):
@@ -309,7 +310,7 @@ def reject_request(approval_id: str, request: RejectRequest) -> dict[str, Any]:
 
 @app.post("/rag/index")
 def rag_index(request: RagIndexRequest) -> dict[str, Any]:
-    doc_id = _get_rag_store().add_document(content=request.text, source=request.source, metadata=request.metadata)
+    doc_id = _get_rag_store().add_document(content=request.text, source=request.source, metadata=request.metadata, embedding_text=request.embedding_text)
     return {"status": "indexed", "doc_id": doc_id, "source": request.source}
 
 

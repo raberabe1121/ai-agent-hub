@@ -272,7 +272,9 @@ def test_rag_index_chunk_by_section_with_h3(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert len(captured) == 2
     assert captured[0]["source"] == "readme#セクションA-1"
+    assert captured[0]["embedding_text"].startswith("セクションA\n")
     assert captured[1]["source"] == "readme#サブセクション-1"
+    assert captured[1]["embedding_text"].startswith("サブセクション\n")
 
 
 def test_rag_query_human_output_with_answer(monkeypatch):
