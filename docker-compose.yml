@@ -6,8 +6,6 @@ services:
       RELAYHOST: ""
     ports:
       - "25:25"
-    volumes:
-      - ./docker/postfix-main.cf:/etc/postfix/main.cf:ro
     networks:
       - agent-net
 
