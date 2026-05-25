@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ai_agent_hub import Envelope
@@ -72,6 +73,13 @@ class RagQueryRequest(BaseModel):
 
 
 app = FastAPI(title="AI Agent Hub API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _iter_json_files(directory: Path):
