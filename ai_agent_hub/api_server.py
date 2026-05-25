@@ -362,6 +362,13 @@ def rag_query(request: RagQueryRequest) -> dict[str, Any]:
             response["answer"] = ""
     return response
 
+@app.get("/intents")
+def list_intents() -> list[dict[str, str]]:
+    from ai_agent_hub.agent_worker import INTENT_HANDLERS
+
+    return [{"name": name} for name in INTENT_HANDLERS.keys()]
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
