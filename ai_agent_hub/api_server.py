@@ -371,16 +371,20 @@ def list_intents() -> list[dict[str, str]]:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    services = {
+        "queue_dir": str(QUEUE_DIR),
+        "processed_dir": str(PROCESSED_DIR),
+        "queue_dir_exists": QUEUE_DIR.exists(),
+        "processed_dir_exists": PROCESSED_DIR.exists(),
+        "smtp_host": os.environ.get("SMTP_HOST", "localhost"),
+        "smtp_port": int(os.environ.get("SMTP_PORT", "25")),
+    }
     return {
         "status": "ok",
-        "services": {
-            "queue_dir": str(QUEUE_DIR),
-            "processed_dir": str(PROCESSED_DIR),
-            "queue_dir_exists": QUEUE_DIR.exists(),
-            "processed_dir_exists": PROCESSED_DIR.exists(),
-            "smtp_host": os.environ.get("SMTP_HOST", "localhost"),
-            "smtp_port": int(os.environ.get("SMTP_PORT", "25")),
-        },
+        "lmtp": True,
+        "api": True,
+        "queue_dir": services["queue_dir_exists"],
+        "services": services,
     }
 
 

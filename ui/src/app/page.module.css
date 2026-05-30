@@ -8,7 +8,7 @@
 .card { background:#111118; border:1px solid #20232a; border-radius:8px; padding:12px; }
 .sectionTitle { margin:0 0 8px 0; font-size:1rem; color:#00ff88; }
 .list { padding-left: 16px; margin: 0; }
-.intentItem { padding:8px; border:1px solid #2a2f3a; border-radius:6px; margin-bottom:8px; }
+.intentItem { padding:8px; border:1px solid #2a2f3a; border-radius:6px; margin-bottom:8px; word-break: break-all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .flow { white-space: pre-wrap; line-height:1.8; color:#9fb3c8; }
 .logLine { font-size: 0.82rem; padding: 6px 0; border-bottom: 1px solid #1d212b; }
 .statusRow { display:flex; justify-content:space-between; font-size:0.88rem; padding:4px 0; }

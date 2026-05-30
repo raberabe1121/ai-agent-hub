@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const fetchHealth = async () => setHealth(await getJson<Health>("/health"));
   const fetchLiveLogs = async () => {
     const data = await getJson<{ logs: LogItem[] }>("/logs?limit=5");
-    setLiveLogs(data.logs ?? []);
+    setLiveLogs((data.logs ?? []).filter((log) => log.intent !== null));
   };
 
   useEffect(() => {
