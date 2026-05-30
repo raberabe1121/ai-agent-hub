@@ -58,16 +58,42 @@ export default function DashboardPage() {
   const [intentResult, setIntentResult] = useState<string | null>(null);
   const [intentLoading, setIntentLoading] = useState(false);
 
-  const fetchIntents = async () => setIntents(await getJson<Intent[]>("/intents"));
-  const fetchLogs = async () => {
-    const data = await getJson<{ logs: LogItem[] }>("/logs?limit=20");
-    setLogs((data.logs ?? []).filter((log) => log.intent !== null));
+  const fetchIntents = async () => {
+    try {
+      setIntents(await getJson<Intent[]>("/intents"));
+    } catch {
+      // Ignore transient dashboard API errors so the page remains usable.
+    }
   };
-  const fetchApprovals = async () => setApprovals(await getJson<Approval[]>("/approvals/pending"));
-  const fetchHealth = async () => setHealth(await getJson<Health>("/health"));
+  const fetchLogs = async () => {
+    try {
+      const data = await getJson<{ logs: LogItem[] }>("/logs?limit=20");
+      setLogs((data.logs ?? []).filter((log) => log.intent !== null));
+    } catch {
+      // Ignore transient dashboard API errors so the page remains usable.
+    }
+  };
+  const fetchApprovals = async () => {
+    try {
+      setApprovals(await getJson<Approval[]>("/approvals/pending"));
+    } catch {
+      // Ignore transient dashboard API errors so the page remains usable.
+    }
+  };
+  const fetchHealth = async () => {
+    try {
+      setHealth(await getJson<Health>("/health"));
+    } catch {
+      // Ignore transient dashboard API errors so the page remains usable.
+    }
+  };
   const fetchLiveLogs = async () => {
-    const data = await getJson<{ logs: LogItem[] }>("/logs?limit=5");
-    setLiveLogs((data.logs ?? []).filter((log) => log.intent !== null));
+    try {
+      const data = await getJson<{ logs: LogItem[] }>("/logs?limit=5");
+      setLiveLogs((data.logs ?? []).filter((log) => log.intent !== null));
+    } catch {
+      // Ignore transient dashboard API errors so the page remains usable.
+    }
   };
 
   useEffect(() => {
