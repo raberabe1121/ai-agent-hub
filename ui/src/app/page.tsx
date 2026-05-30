@@ -14,7 +14,15 @@ type LogItem = {
   type: string;
   payload: Record<string, unknown>;
 };
-type Approval = { id: string; title?: string; reason?: string; requester?: string };
+type Approval = {
+  approval_id: string;
+  description?: string;
+  approver?: string;
+  requester?: string;
+  status?: string;
+  created_at?: string;
+};
+type ApprovalApiItem = Approval & { envelope_id?: string };
 type Health = { lmtp?: boolean; api?: boolean; queue_dir?: boolean; dlq_count?: number; hitl_pending?: number };
 
 const API_BASE = process.env.NEXT_PUBLIC_HUB_API_URL ?? "http://localhost:8080";
@@ -39,7 +47,19 @@ export default function DashboardPage() {
     const data = await getJson<{ logs: LogItem[] }>("/logs?limit=20");
     setLogs((data.logs ?? []).filter((log) => log.intent !== null));
   };
-  const fetchApprovals = async () => setApprovals(await getJson<Approval[]>("/approvals/pending"));
+  const fetchApprovals = async () => {
+    const data = await getJson<ApprovalApiItem[]>("/approvals/pending");
+    setApprovals(
+      data.map((item) => ({
+        approval_id: item.approval_id ?? item.envelope_id ?? "",
+        description: item.description,
+        approver: item.approver,
+        requester: item.requester,
+        status: item.status,
+        created_at: item.created_at
+      }))
+    );
+  };
   const fetchHealth = async () => setHealth(await getJson<Health>("/health"));
   const fetchLiveLogs = async () => {
     const data = await getJson<{ logs: LogItem[] }>("/logs?limit=5");
@@ -109,7 +129,7 @@ export default function DashboardPage() {
           {tab === "Architecture" && (<><h3 className={styles.sectionTitle}>AI Agent Hubが担うこと</h3><ul className={styles.list}><li>Intent分類と配信</li><li>LMTP経由のメールワークフロー統合</li><li>承認フロー(HITL)管理</li><li>監査ログ蓄積</li></ul><h3 className={styles.sectionTitle} style={{ marginTop: 16 }}>Architecture Flow</h3><div className={styles.flow}>CLI/SDK → REST API :8080 → LMTP :8024 → Postfix → Agent Worker → LLM</div></>)}
           {tab === "Intents" && intents.map((intent) => (<div key={intent.name} className={styles.intentItem}><strong>{intent.name}</strong><div className={styles.small}>{intent.description ?? "No description"}</div></div>))}
           {tab === "Logs" && logs.map((log, idx) => (<div key={`${log.id}-${idx}`} className={styles.logLine}>[{new Date(log.time).toLocaleTimeString()}] | [{log.intent ?? "-"}] | [{log.from} → {log.to}] | [{log.type}]</div>))}
-          {tab === "HITL" && approvals.map((item) => (<div key={item.id} className={styles.intentItem}><strong>{item.title ?? item.id}</strong><div className={styles.small}>{item.requester ?? "unknown"}</div><div className={styles.small}>{item.reason ?? ""}</div><input className={styles.reason} placeholder="却下理由" value={rejectReasons[item.id] ?? ""} onChange={(e) => setRejectReasons((p) => ({ ...p, [item.id]: e.target.value }))} /><div className={styles.buttonRow}><button className={styles.btnApprove} onClick={() => void decideApproval(item.id, "approve")}>承認</button><button className={styles.btnReject} onClick={() => void decideApproval(item.id, "reject")}>却下</button></div></div>))}
+          {tab === "HITL" && approvals.map((item) => (<div key={item.approval_id} className={styles.approvalCard}><strong className={styles.approvalDescription}>{item.description ?? "承認内容の説明がありません"}</strong><div className={styles.small}>ID: {item.approval_id.slice(0, 8)}</div><div className={styles.small}>approver: {item.approver ?? "-"}</div><div className={styles.small}>created_at: {item.created_at ? new Date(item.created_at).toLocaleString() : "-"}</div><input className={styles.reason} placeholder="却下理由" value={rejectReasons[item.approval_id] ?? ""} onChange={(e) => setRejectReasons((p) => ({ ...p, [item.approval_id]: e.target.value }))} /><div className={styles.buttonRow}><button className={styles.btnApprove} onClick={() => void decideApproval(item.approval_id, "approve")}>承認</button><button className={styles.btnReject} onClick={() => void decideApproval(item.approval_id, "reject")}>却下</button></div></div>))}
         </section>
 
         <aside className={styles.card}>
