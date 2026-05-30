@@ -4,12 +4,26 @@
 .tabs { display:flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #20232a; }
 .tab, .tabActive { border:1px solid #2a2f3a; background:#111118; color:#d0d7de; padding:8px 12px; cursor:pointer; }
 .tabActive { border-color:#00ff88; color:#00ff88; }
+.filterRow { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.filterButton, .filterButtonActive { border:1px solid #2a2f3a; background:#111118; color:#d0d7de; padding:4px 8px; cursor:pointer; font-size:0.78rem; border-radius:4px; }
+.filterButtonActive { border-color:#00ff88; color:#00ff88; }
 .grid { flex:1; display:grid; grid-template-columns: 270px 1fr 320px; gap:12px; padding:12px; }
 .grid > aside:first-child { min-width: 270px; }
 .card { background:#111118; border:1px solid #20232a; border-radius:8px; padding:12px; }
 .sectionTitle { margin:0 0 8px 0; font-size:1rem; color:#00ff88; }
 .list { padding-left: 16px; margin: 0; }
 .intentItem { padding: 6px 8px 6px 10px; border:1px solid #2a2f3a; border-radius:6px; margin-bottom:8px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; box-sizing: border-box; }
+.intentTestLayout { display:grid; grid-template-columns: minmax(180px, 260px) 1fr; gap:12px; }
+.intentButton, .intentButtonActive { display:block; width:100%; box-sizing:border-box; margin-bottom:8px; padding:8px 10px; border:1px solid #2a2f3a; border-radius:6px; background:#0d0d14; color:#e6edf3; text-align:left; cursor:pointer; }
+.intentButton span, .intentButtonActive span { display:block; margin-top:4px; white-space:normal; }
+.intentButtonActive { border-color:#00ff88; color:#00ff88; }
+.intentPanel { min-height:260px; padding:12px; border:1px solid #2a2f3a; border-radius:8px; background:#0d0d14; }
+.intentPanelTitle { margin:0 0 12px 0; color:#e6edf3; font-size:1.25rem; }
+.fieldLabel { display:block; margin-bottom:6px; color:#8b949e; font-size:0.82rem; }
+.intentTextarea { width:100%; min-height:120px; box-sizing:border-box; resize:vertical; margin-bottom:10px; background:#0a0a0f; border:1px solid #2a2f3a; border-radius:6px; color:#e6edf3; padding:8px; font:inherit; }
+.sendButton { border:none; border-radius:4px; padding:7px 12px; margin-bottom:10px; cursor:pointer; color:#0a0a0f; background:#00ff88; font-weight:700; }
+.sendButton:disabled { cursor:not-allowed; opacity:0.65; }
+.intentResult { margin:0; padding:10px; border:1px solid #1d212b; border-radius:6px; background:#0a0a0f; color:#d0d7de; font-size:0.8rem; overflow:auto; white-space:pre-wrap; }
 .approvalCard { padding:12px; border:1px solid #2a2f3a; border-radius:6px; margin-bottom:12px; background:#0d0d14; }
 .approvalDescription { display:block; margin-bottom:8px; color:#e6edf3; font-size:1rem; line-height:1.4; white-space: normal; word-break: break-word; }
 .flow { white-space: pre-wrap; line-height:1.8; color:#9fb3c8; }
