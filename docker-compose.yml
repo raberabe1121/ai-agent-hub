@@ -65,6 +65,19 @@ services:
     networks:
       - agent-net
 
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_HUB_API_URL=http://api:8080
+    depends_on:
+      - api
+    networks:
+      - agent-net
+
 networks:
   agent-net:
     driver: bridge
