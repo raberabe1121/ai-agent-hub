@@ -4,6 +4,9 @@
 .tabs { display:flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #20232a; }
 .tab, .tabActive { border:1px solid #2a2f3a; background:#111118; color:#d0d7de; padding:8px 12px; cursor:pointer; }
 .tabActive { border-color:#00ff88; color:#00ff88; }
+.filterRow { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.filterButton, .filterButtonActive { border:1px solid #2a2f3a; background:#111118; color:#d0d7de; padding:4px 8px; cursor:pointer; font-size:0.78rem; border-radius:4px; }
+.filterButtonActive { border-color:#00ff88; color:#00ff88; }
 .grid { flex:1; display:grid; grid-template-columns: 270px 1fr 320px; gap:12px; padding:12px; }
 .grid > aside:first-child { min-width: 270px; }
 .card { background:#111118; border:1px solid #20232a; border-radius:8px; padding:12px; }
