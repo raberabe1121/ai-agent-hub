@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ai_agent_hub import Envelope
@@ -72,6 +73,13 @@ class RagQueryRequest(BaseModel):
 
 
 app = FastAPI(title="AI Agent Hub API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _iter_json_files(directory: Path):
@@ -354,18 +362,29 @@ def rag_query(request: RagQueryRequest) -> dict[str, Any]:
             response["answer"] = ""
     return response
 
+@app.get("/intents")
+def list_intents() -> list[dict[str, str]]:
+    from ai_agent_hub.agent_worker import INTENT_HANDLERS
+
+    return [{"name": name} for name in INTENT_HANDLERS.keys()]
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
+    services = {
+        "queue_dir": str(QUEUE_DIR),
+        "processed_dir": str(PROCESSED_DIR),
+        "queue_dir_exists": QUEUE_DIR.exists(),
+        "processed_dir_exists": PROCESSED_DIR.exists(),
+        "smtp_host": os.environ.get("SMTP_HOST", "localhost"),
+        "smtp_port": int(os.environ.get("SMTP_PORT", "25")),
+    }
     return {
         "status": "ok",
-        "services": {
-            "queue_dir": str(QUEUE_DIR),
-            "processed_dir": str(PROCESSED_DIR),
-            "queue_dir_exists": QUEUE_DIR.exists(),
-            "processed_dir_exists": PROCESSED_DIR.exists(),
-            "smtp_host": os.environ.get("SMTP_HOST", "localhost"),
-            "smtp_port": int(os.environ.get("SMTP_PORT", "25")),
-        },
+        "lmtp": True,
+        "api": True,
+        "queue_dir": services["queue_dir_exists"],
+        "services": services,
     }
 
 
