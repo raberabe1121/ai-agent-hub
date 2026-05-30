@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const fetchIntents = async () => setIntents(await getJson<Intent[]>("/intents"));
   const fetchLogs = async () => {
     const data = await getJson<{ logs: LogItem[] }>("/logs?limit=20");
-    setLogs(data.logs ?? []);
+    setLogs((data.logs ?? []).filter((log) => log.intent !== null));
   };
   const fetchApprovals = async () => setApprovals(await getJson<Approval[]>("/approvals/pending"));
   const fetchHealth = async () => setHealth(await getJson<Health>("/health"));
