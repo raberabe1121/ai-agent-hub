@@ -217,6 +217,46 @@ def logs(thread_id: str | None, limit: int, intent_name: str | None, api_url: st
         click.echo(f"{timestamp} | {(intent or '-'):<14} | {sender} → {recipient} | ✅ {summary}")
 
 
+def _format_count(value: Any) -> str:
+    try:
+        return f"{int(value or 0):,}"
+    except (TypeError, ValueError):
+        return "0"
+
+
+@main.command("token-usage")
+@click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
+def token_usage(api_url: str) -> None:
+    """intent別のトークン使用量を表示。"""
+
+    base = _normalize_url(api_url)
+    data = _api_call("GET", f"{base}/token-usage")
+    if not isinstance(data, dict):
+        raise click.ClickException("token-usage API response is invalid")
+
+    rows = data.get("by_intent") if isinstance(data.get("by_intent"), list) else []
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+
+    click.echo("Intent           | 件数 | 入力    | 出力   | 合計")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        intent = str(row.get("intent") or "-")
+        click.echo(
+            f"{intent:<16} | {int(row.get('count') or 0):>4} | "
+            f"{_format_count(row.get('prompt_tokens')):>7} | "
+            f"{_format_count(row.get('completion_tokens')):>6} | "
+            f"{_format_count(row.get('total_tokens')):>6}"
+        )
+    click.echo("─────────────────────────────────────────────────")
+    click.echo(
+        f"{'合計':<16} | {int(summary.get('count') or 0):>4} | "
+        f"{_format_count(summary.get('prompt_tokens')):>7} | "
+        f"{_format_count(summary.get('completion_tokens')):>6} | "
+        f"{_format_count(summary.get('total_tokens')):>6}"
+    )
+
+
 @main.command()
 @click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
 def pending(api_url: str) -> None:

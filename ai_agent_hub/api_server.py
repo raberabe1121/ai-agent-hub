@@ -18,6 +18,7 @@ from ai_agent_hub import Envelope
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 from ai_agent_hub.rag import RAGStore
+from ai_agent_hub.token_usage import TokenUsageStore
 import ai_agent_hub.agent_worker as agent_worker
 
 
@@ -361,6 +362,16 @@ def rag_query(request: RagQueryRequest) -> dict[str, Any]:
         else:
             response["answer"] = ""
     return response
+
+@app.get("/token-usage")
+def get_token_usage() -> dict[str, Any]:
+    store = TokenUsageStore()
+    return {"summary": store.summary(), "by_intent": store.summary_by_intent()}
+
+
+@app.get("/token-usage/by-intent")
+def get_token_usage_by_intent() -> list[dict[str, Any]]:
+    return TokenUsageStore().summary_by_intent()
 
 @app.get("/intents")
 def list_intents() -> list[dict[str, str]]:
