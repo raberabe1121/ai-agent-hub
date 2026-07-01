@@ -638,7 +638,7 @@ def _handle_llm_compare(env: Envelope) -> dict[str, Any]:
     if not isinstance(env.payload, dict):
         return {"error": "payload must be a dict"}
 
-    query = env.payload.get("query")
+    query = env.payload.get("query") or env.payload.get("text")
     if not isinstance(query, str) or not query.strip():
         return {"error": "payload.query is required"}
 

@@ -45,6 +45,33 @@ def test_llm_compare_returns_divergence_score(monkeypatch):
     assert reply.payload["bias_alert"] is False
 
 
+def test_llm_compare_accepts_text_payload(monkeypatch):
+    def fake_query(provider, text, payload):
+        return {"provider": f"{provider}/model", "result": f"answer for {text}"}
+
+    monkeypatch.setattr(agent_worker, "_query_llm_provider", fake_query)
+    monkeypatch.setattr(
+        agent_worker, "_embed_texts", lambda texts: [[1.0, 0.0], [1.0, 0.0]]
+    )
+
+    reply = agent_worker._handle_envelope(
+        _make_env(
+            {
+                "intent": "llm-compare",
+                "text": "hub cli query",
+                "providers": ["ollama", "openai"],
+            }
+        )
+    )
+
+    assert reply is not None
+    assert reply.payload["query"] == "hub cli query"
+    assert reply.payload["answers"] == [
+        {"provider": "ollama/model", "answer": "answer for hub cli query"},
+        {"provider": "openai/model", "answer": "answer for hub cli query"},
+    ]
+
+
 def test_llm_compare_sets_bias_alert_when_low_divergence(monkeypatch):
     def fake_query(provider, text, payload):
         return {"provider": f"{provider}/model", "result": "same answer"}
