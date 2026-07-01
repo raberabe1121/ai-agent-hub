@@ -28,6 +28,7 @@ from ai_agent_hub.lmtp_handler import (
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
 from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 from ai_agent_hub.rag import RAGStore
+from ai_agent_hub.token_usage import TokenUsageStore, get_default_db_path
 
 WORKER_ENV_FILES = (
     Path(".env"),
@@ -521,7 +522,14 @@ def _query_openai(text: str, model: str) -> dict[str, Any]:
         return {"error": str(exc)}
 
 
-def _query_ollama(text: str, model: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _query_ollama(
+    text: str,
+    model: str,
+    payload: dict[str, Any],
+    *,
+    envelope_id: str | None = None,
+    intent: str = "llm-query",
+) -> dict[str, Any]:
     api_key = None
     payload_api_key = payload.get("api_key")
     if isinstance(payload_api_key, str) and payload_api_key.strip():
@@ -551,6 +559,14 @@ def _query_ollama(text: str, model: str, payload: dict[str, Any]) -> dict[str, A
         )
         response.raise_for_status()
         data = response.json()
+        TokenUsageStore(get_default_db_path()).record(
+            envelope_id=envelope_id,
+            intent=intent,
+            model=model,
+            provider="ollama",
+            prompt_tokens=data.get("prompt_eval_count", 0),
+            completion_tokens=data.get("eval_count", 0),
+        )
         message = data.get("message", {})
         content = message.get("content")
         if not isinstance(content, str):
@@ -589,7 +605,7 @@ def _handle_llm_query(env: Envelope) -> dict:
     if provider == "openai":
         return _query_openai(text, model)
 
-    return _query_ollama(text, model, payload)
+    return _query_ollama(text, model, payload, envelope_id=env.id, intent=str(payload.get("intent", "llm-query")))
 
 
 def _embed_texts(texts: Sequence[str]) -> list[list[float]]:
