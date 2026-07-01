@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import importlib
 import os
@@ -9,7 +10,7 @@ import textwrap
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Sequence
 from xml.etree import ElementTree
 
 from ai_agent_hub import Envelope
@@ -465,50 +466,72 @@ def _handle_payment(env: Envelope) -> dict:
     return gateway.execute(env)
 
 
-@intent_handler("llm-query")
-def _handle_llm_query(env: Envelope) -> dict:
-    text = None
-    if isinstance(env.payload, dict):
-        text = env.payload.get("text")
-    if not text:
-        return {"error": "payload.text is required"}
+def _provider_model(provider: str, payload: dict[str, Any]) -> str:
+    models = payload.get("models")
+    if isinstance(models, dict):
+        model = models.get(provider)
+        if isinstance(model, str) and model.strip():
+            return model.strip()
 
-    provider = os.environ.get("LLM_PROVIDER", "ollama").strip().lower()
+    model = payload.get("model")
+    if isinstance(model, str) and model.strip():
+        return model.strip()
 
     if provider == "openai":
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            return {"error": "OPENAI_API_KEY is not set"}
+        return "gpt-4o-mini"
+    return "gemma3:4b"
 
-        try:
-            openai = importlib.import_module("openai")
-        except ImportError:
-            return {"error": "openai package not installed"}
 
-        model = "gpt-4o-mini"
-        if isinstance(env.payload, dict):
-            model = env.payload.get("model", model)
+def _configured_llm_providers(payload: dict[str, Any]) -> list[str]:
+    providers = payload.get("providers")
+    if isinstance(providers, list):
+        configured = [
+            str(provider).strip().lower()
+            for provider in providers
+            if str(provider).strip()
+        ]
+        if configured:
+            return configured
 
-        try:
-            client = openai.OpenAI(api_key=api_key)
-            response = client.responses.create(model=model, input=text)
-            return {"result": response.output_text}
-        except Exception as exc:
-            return {"error": str(exc)}
+    configured: list[str] = []
+    if os.environ.get("OLLAMA_API_KEY") or _read_config_value(
+        OLLAMA_CONFIG_PATH, "OLLAMA_API_KEY"
+    ):
+        configured.append("ollama")
+    if os.environ.get("OPENAI_API_KEY"):
+        configured.append("openai")
+    return configured or [os.environ.get("LLM_PROVIDER", "ollama").strip().lower()]
 
+
+def _query_openai(text: str, model: str) -> dict[str, Any]:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {"error": "OPENAI_API_KEY is not set"}
+
+    try:
+        openai = importlib.import_module("openai")
+    except ImportError:
+        return {"error": "openai package not installed"}
+
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        response = client.responses.create(model=model, input=text)
+        return {"result": response.output_text}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _query_ollama(text: str, model: str, payload: dict[str, Any]) -> dict[str, Any]:
     api_key = None
-    if isinstance(env.payload, dict):
-        payload_api_key = env.payload.get("api_key")
-        if isinstance(payload_api_key, str) and payload_api_key.strip():
-            api_key = payload_api_key.strip()
+    payload_api_key = payload.get("api_key")
+    if isinstance(payload_api_key, str) and payload_api_key.strip():
+        api_key = payload_api_key.strip()
     if not api_key:
         api_key = os.environ.get("OLLAMA_API_KEY")
     if not api_key:
+        api_key = _read_config_value(OLLAMA_CONFIG_PATH, "OLLAMA_API_KEY")
+    if not api_key:
         return {"error": "OLLAMA_API_KEY is not set (checked payload and env)"}
-
-    model = "gemma3:4b"
-    if isinstance(env.payload, dict):
-        model = env.payload.get("model", model)
 
     try:
         httpx = importlib.import_module("httpx")
@@ -535,6 +558,126 @@ def _handle_llm_query(env: Envelope) -> dict:
         return {"result": content}
     except Exception as exc:
         return {"error": str(exc)}
+
+
+def _query_llm_provider(
+    provider: str, text: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    model = _provider_model(provider, payload)
+    if provider == "openai":
+        response = _query_openai(text, model)
+    elif provider == "ollama":
+        response = _query_ollama(text, model, payload)
+    else:
+        response = {"error": f"unsupported provider: {provider}"}
+    response["provider"] = f"{provider}/{model}"
+    return response
+
+
+@intent_handler("llm-query")
+def _handle_llm_query(env: Envelope) -> dict:
+    text = None
+    if isinstance(env.payload, dict):
+        text = env.payload.get("text")
+    if not text:
+        return {"error": "payload.text is required"}
+
+    payload = env.payload if isinstance(env.payload, dict) else {}
+    provider = os.environ.get("LLM_PROVIDER", "ollama").strip().lower()
+    model = _provider_model(provider, payload)
+
+    if provider == "openai":
+        return _query_openai(text, model)
+
+    return _query_ollama(text, model, payload)
+
+
+def _embed_texts(texts: Sequence[str]) -> list[list[float]]:
+    model = RAGStore._get_model()
+    vectors = []
+    for vec in model.embed(list(texts)):
+        if hasattr(vec, "tolist"):
+            vec = vec.tolist()
+        vectors.append([float(value) for value in vec])
+    return vectors
+
+
+def _cosine_distance(left: Sequence[float], right: Sequence[float]) -> float:
+    dot = sum(a * b for a, b in zip(left, right))
+    left_norm = sum(a * a for a in left) ** 0.5
+    right_norm = sum(b * b for b in right) ** 0.5
+    if left_norm <= 0 or right_norm <= 0:
+        return 1.0
+    similarity = max(-1.0, min(1.0, dot / (left_norm * right_norm)))
+    return max(0.0, min(1.0, (1.0 - similarity) / 2.0))
+
+
+def _divergence_score(vectors: Sequence[Sequence[float]]) -> float:
+    if len(vectors) < 2:
+        return 0.0
+    distances = [
+        _cosine_distance(vectors[i], vectors[j])
+        for i in range(len(vectors))
+        for j in range(i + 1, len(vectors))
+    ]
+    return sum(distances) / len(distances)
+
+
+async def _compare_llms_async(
+    query: str, providers: list[str], payload: dict[str, Any]
+) -> list[dict[str, Any]]:
+    tasks = [
+        asyncio.to_thread(_query_llm_provider, provider, query, payload)
+        for provider in providers
+    ]
+    return await asyncio.gather(*tasks)
+
+
+@intent_handler("llm-compare")
+def _handle_llm_compare(env: Envelope) -> dict[str, Any]:
+    if not isinstance(env.payload, dict):
+        return {"error": "payload must be a dict"}
+
+    query = env.payload.get("query") or env.payload.get("text")
+    if not isinstance(query, str) or not query.strip():
+        return {"error": "payload.query is required"}
+
+    providers = _configured_llm_providers(env.payload)
+    raw_answers = asyncio.run(_compare_llms_async(query, providers, env.payload))
+    errors = [answer for answer in raw_answers if "error" in answer]
+    if errors:
+        return {"error": "llm-compare provider error", "details": errors}
+
+    answers = [
+        {"provider": answer["provider"], "answer": answer["result"]}
+        for answer in raw_answers
+    ]
+    vectors = _embed_texts([answer["answer"] for answer in answers])
+    divergence_score = round(_divergence_score(vectors), 4)
+    bias_alert = divergence_score < 0.3
+    result = {
+        "query": query,
+        "answers": answers,
+        "divergence_score": divergence_score,
+        "bias_alert": bias_alert,
+        "bias_reason": "全プロバイダーが類似した回答を返しています" if bias_alert else "",
+    }
+
+    if env.payload.get("auto_rag_index") is True:
+        source = f"llm-compare/{datetime.now(timezone.utc).date().isoformat()}"
+        doc_id = _get_rag_store().add_document(
+            content=json.dumps(result, ensure_ascii=False),
+            source=source,
+            metadata={
+                "query": query,
+                "providers": [answer["provider"] for answer in answers],
+            },
+            embedding_text="\n\n".join(answer["answer"] for answer in answers),
+        )
+        result["rag_doc_id"] = doc_id
+        result["rag_source"] = source
+
+    return result
 
 
 def _llm_json_response(prompt: str, model: str = "gemma3:4b") -> dict[str, Any]:
