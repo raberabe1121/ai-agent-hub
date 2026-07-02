@@ -17,16 +17,16 @@ from ai_agent_hub import Envelope
 from ai_agent_hub.cli_skills import CliSkillRunner
 from ai_agent_hub.entropy_monitor import EntropyMonitor
 from ai_agent_hub.payment_gateway import PaymentGateway
-from ai_agent_hub.lmtp_handler import (
+from ai_agent_hub.repository import (
     FAILED,
     PROCESSED,
     FileSystemRepository,
     SQLiteRepository,
     get_queue_dir,
     get_repository,
+    save_envelope,
 )
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
-from ai_agent_hub.smtp_sender import send_envelope_via_smtp
 from ai_agent_hub.rag import RAGStore
 from ai_agent_hub.token_usage import TokenUsageStore, get_default_db_path
 
@@ -431,7 +431,7 @@ def _handle_approve(env: Envelope) -> dict:
         context=approved_request.thread_id,
         in_reply_to=approved_request.envelope_id,
     )
-    send_envelope_via_smtp(callback_envelope)
+    save_envelope(callback_envelope)
     return {"status": "approved", "message": "承認しました"}
 
 
@@ -1052,7 +1052,7 @@ def process_next_envelope() -> bool:
         _mark_processed(env.id)
 
         if reply and not (_is_error_payload(reply.payload) and _is_agent_id(reply.recipient)):
-            send_envelope_via_smtp(reply)
+            save_envelope(reply)
         return True
     except Exception:
         _mark_failed(env.id)

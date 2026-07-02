@@ -37,14 +37,14 @@ def queue_dirs(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def sent_envelopes(monkeypatch) -> List[Envelope]:
-    """Capture envelopes that would be sent via SMTP."""
+    """Capture envelopes that would be queued directly."""
 
     captured: List[Envelope] = []
 
     def _fake_send(env: Envelope) -> None:
         captured.append(env)
 
-    monkeypatch.setattr(agent_worker, "send_envelope_via_smtp", _fake_send)
+    monkeypatch.setattr(agent_worker, "save_envelope", _fake_send)
     return captured
 
 

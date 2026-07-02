@@ -24,7 +24,6 @@ os.environ["AI_AGENT_HUB_APPROVAL_DB"] = "/opt/ai-agent-hub/approvals.db"
 
 from ai_agent_hub import Envelope
 import ai_agent_hub.agent_worker as agent_worker
-from ai_agent_hub.governance_milter import evaluate_policy
 from ai_agent_hub.human_in_the_loop import ApprovalStore
 from ai_agent_hub.repository import PROCESSED, SQLiteRepository, get_repository
 
@@ -33,6 +32,24 @@ PROCESSED_DIR = Path(os.environ["AI_AGENT_HUB_PROCESSED_DIR"])
 DLQ_DIR = Path("/opt/ai-agent-hub/dlq")
 SQLITE_PATH = Path(os.environ["AI_AGENT_HUB_SQLITE_PATH"])
 APPROVAL_DB_PATH = Path(os.environ["AI_AGENT_HUB_APPROVAL_DB"])
+
+
+
+
+@dataclass(frozen=True)
+class PolicyDecision:
+    accepted: bool
+    reason: str
+
+
+def evaluate_policy(*, sender: str, message: EmailMessage, allowed_domain: str) -> PolicyDecision:
+    """Demo-only inline policy check replacing the removed Postfix milter."""
+
+    sender_domain = sender.rsplit("@", 1)[-1] if "@" in sender else ""
+    policy = message.get("X-Agent-Policy", "")
+    if "confidential=block" in policy and sender_domain != allowed_domain:
+        return PolicyDecision(False, "confidential delivery blocked")
+    return PolicyDecision(True, "accepted")
 
 
 @dataclass
@@ -337,8 +354,8 @@ def main() -> None:
     register_demo_flaky_handler(context)
 
     sent_messages: list[Envelope] = []
-    original_send = agent_worker.send_envelope_via_smtp
-    agent_worker.send_envelope_via_smtp = patched_send_factory(sent_messages)
+    original_send = agent_worker.save_envelope
+    agent_worker.save_envelope = patched_send_factory(sent_messages)
 
     stop_event = threading.Event()
     worker_thread = threading.Thread(target=worker_loop, args=(stop_event,), daemon=True)
@@ -383,7 +400,7 @@ def main() -> None:
         )
         print("  → PolicyAgent判定: 10万円以上なので人間承認が必須です")
         print(f"  → X-Agent-Policy: {policy_header}")
-        print(f"  → Governance Milterチェック: accepted={decision.accepted}, reason={decision.reason}")
+        print(f"  → Inline governanceチェック: accepted={decision.accepted}, reason={decision.reason}")
 
         policy_envelope = Envelope.new(
             envelope_type="event",
@@ -525,7 +542,7 @@ def main() -> None:
     finally:
         stop_event.set()
         worker_thread.join(timeout=2.0)
-        agent_worker.send_envelope_via_smtp = original_send
+        agent_worker.save_envelope = original_send
 
 
 if __name__ == "__main__":

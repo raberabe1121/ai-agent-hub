@@ -24,7 +24,7 @@ type Approval = {
   created_at?: string;
   callback_payload?: Record<string, unknown>;
 };
-type Health = { lmtp?: boolean; api?: boolean; queue_dir?: boolean; dlq_count?: number; hitl_pending?: number };
+type Health = { api?: boolean; queue_dir?: boolean; dlq_count?: number; hitl_pending?: number };
 
 const API_BASE = process.env.NEXT_PUBLIC_HUB_API_URL ?? "http://localhost:8080";
 
@@ -168,7 +168,7 @@ export default function DashboardPage() {
     <div className={styles.container}>
       <header className={styles.topbar}>
         <strong>AI Agent Hub v0.6</strong>
-        <span className={styles.live}>● LMTP LIVE</span>
+        <span className={styles.live}>● QUEUE LIVE</span>
       </header>
 
       <nav className={styles.tabs}>
@@ -181,14 +181,14 @@ export default function DashboardPage() {
         <aside className={styles.card}>
           <h3 className={styles.sectionTitle}>Hub Core</h3>
           <ul className={styles.list}>
-            <li>⚙️ LMTP Server :8024</li><li>📬 MTA / Postfix :25</li><li>📋 Envelope Model</li><li>👤 Human-in-Loop</li><li>💀 Dead Letter Queue</li>
+            <li>📥 Direct Queue</li><li>📋 Envelope Model</li><li>👤 Human-in-Loop</li><li>💀 Dead Letter Queue</li>
           </ul>
           <h3 className={styles.sectionTitle} style={{ marginTop: 16 }}>Intents</h3>
           {intents.map((intent) => <div key={intent.name} className={styles.intentItem}>{intent.name}</div>)}
         </aside>
 
         <section className={styles.card}>
-          {tab === "Architecture" && (<><h3 className={styles.sectionTitle}>AI Agent Hubが担うこと</h3><ul className={styles.list}><li>Intent分類と配信</li><li>LMTP経由のメールワークフロー統合</li><li>承認フロー(HITL)管理</li><li>監査ログ蓄積</li></ul><h3 className={styles.sectionTitle} style={{ marginTop: 16 }}>Architecture Flow</h3><div className={styles.flow}>CLI/SDK → REST API :8080 → LMTP :8024 → Postfix → Agent Worker → LLM</div></>)}
+          {tab === "Architecture" && (<><h3 className={styles.sectionTitle}>AI Agent Hubが担うこと</h3><ul className={styles.list}><li>Intent分類と配信</li><li>Queueベースのワークフロー統合</li><li>承認フロー(HITL)管理</li><li>監査ログ蓄積</li></ul><h3 className={styles.sectionTitle} style={{ marginTop: 16 }}>Architecture Flow</h3><div className={styles.flow}>CLI/SDK → REST API :8080 → Queue → Agent Worker → LLM</div></>)}
           {tab === "Intents" && (
             <div className={styles.intentTestLayout}>
               <div>
@@ -248,7 +248,7 @@ export default function DashboardPage() {
 
         <aside className={styles.card}>
           <h3 className={styles.sectionTitle}>Hub Status</h3>
-          <div className={styles.statusRow}><span><span className={`${styles.dot} ${health.lmtp ? styles.green : styles.red}`} />LMTP Server</span><span>:8024</span></div>
+          <div className={styles.statusRow}><span><span className={`${styles.dot} ${health.queue_dir ? styles.green : styles.red}`} />Queue</span><span>direct</span></div>
           <div className={styles.statusRow}><span><span className={`${styles.dot} ${health.api ? styles.green : styles.red}`} />REST API</span><span>:8080</span></div>
           <div className={styles.statusRow}><span><span className={`${styles.dot} ${health.queue_dir ? styles.green : styles.yellow}`} />Queue Dir</span><span>{health.queue_dir ? "OK" : "WARN"}</span></div>
           <div className={styles.statusRow}><span>DLQ件数</span><span>{health.dlq_count ?? 0}</span></div>

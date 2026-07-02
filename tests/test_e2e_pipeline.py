@@ -23,7 +23,7 @@ os.environ["AI_AGENT_HUB_PROCESSED_DIR"] = str(SYSTEM_PROCESSED_DIR)
 
 import ai_agent_hub.agent_worker as _agent_worker
 from ai_agent_hub import Envelope
-from ai_agent_hub.smtp_sender import send_envelope_via_smtp
+from ai_agent_hub.repository import save_envelope
 
 agent_worker = importlib.reload(_agent_worker)
 process_next_envelope = agent_worker.process_next_envelope
@@ -73,7 +73,7 @@ async def test_smtp_to_systemd_lmtp_persists_and_worker_reads_queue() -> None:
         context=context_token,
     )
 
-    await asyncio.to_thread(send_envelope_via_smtp, env)
+    await asyncio.to_thread(save_envelope, env)
 
     queued_file = await wait_for_matching_envelope(SYSTEM_QUEUE_DIR, context_token)
     assert queued_file is not None, "No matching envelope JSON persisted to system queue"
