@@ -1,31 +1,4 @@
 services:
-  postfix:
-    image: boky/postfix
-    environment:
-      ALLOWED_SENDER_DOMAINS: localhost
-      RELAYHOST: ""
-    ports:
-      - "25:25"
-    networks:
-      - agent-net
-
-  lmtp:
-    build: .
-    command: python -m ai_agent_hub.lmtp_server
-    environment:
-      AI_AGENT_HUB_QUEUE_DIR: /data/queue
-      AI_AGENT_HUB_PROCESSED_DIR: /data/processed
-      AI_AGENT_HUB_STORAGE: sqlite
-      AI_AGENT_HUB_SQLITE_PATH: /data/agent_hub.db
-    volumes:
-      - ./data:/data
-    ports:
-      - "8024:8024"
-    depends_on:
-      - postfix
-    networks:
-      - agent-net
-
   worker:
     build: .
     command: python -m ai_agent_hub.agent_worker
@@ -39,9 +12,6 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
     volumes:
       - ./data:/data
-    depends_on:
-      - postfix
-      - lmtp
     networks:
       - agent-net
 
@@ -53,14 +23,11 @@ services:
     environment:
       AI_AGENT_HUB_QUEUE_DIR: /data/queue
       AI_AGENT_HUB_PROCESSED_DIR: /data/processed
+      AI_AGENT_HUB_STORAGE: sqlite
       AI_AGENT_HUB_SQLITE_PATH: /data/agent_hub.db
-      SMTP_HOST: postfix
-      SMTP_PORT: 25
     volumes:
       - ./data:/data
     depends_on:
-      - postfix
-      - lmtp
       - worker
     networks:
       - agent-net

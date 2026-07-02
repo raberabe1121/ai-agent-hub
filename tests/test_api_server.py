@@ -11,7 +11,7 @@ client = TestClient(app)
 
 
 def test_post_envelopes_returns_envelope_id(monkeypatch):
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", lambda env: None)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", lambda env: None)
 
     response = client.post(
         "/envelopes",
@@ -30,7 +30,7 @@ def test_post_envelopes_accepts_answers_payload(monkeypatch):
     def _capture_env(env):
         captured["payload"] = env.payload
 
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", _capture_env)
 
     response = client.post(
         "/envelopes",
@@ -51,7 +51,7 @@ def test_post_envelopes_accepts_nested_payload(monkeypatch):
     def _capture_env(env):
         captured["payload"] = env.payload
 
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", _capture_env)
 
     response = client.post(
         "/envelopes",
@@ -72,7 +72,7 @@ def test_post_envelopes_preserves_payload_fields(monkeypatch):
     def _capture_env(env):
         captured["payload"] = env.payload
 
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", _capture_env)
 
     response = client.post(
         "/envelopes",
@@ -124,7 +124,7 @@ def test_post_envelopes_request_approval_payload_and_thread(monkeypatch):
         captured["payload"] = env.payload
         captured["context"] = env.context
 
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", _capture_env)
 
     response = client.post(
         "/envelopes",
@@ -153,7 +153,7 @@ def test_post_envelopes_request_approval_parses_text_json_fallback(monkeypatch):
     def _capture_env(env):
         captured["payload"] = env.payload
 
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", _capture_env)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", _capture_env)
 
     response = client.post(
         "/envelopes",
@@ -338,7 +338,7 @@ def test_approval_endpoints_use_env_db_path(monkeypatch):
 
 
 def test_create_approval_request_endpoint(monkeypatch):
-    monkeypatch.setattr("ai_agent_hub.api_server.send_envelope_via_smtp", lambda env: None)
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", lambda env: None)
     monkeypatch.setattr(
         "ai_agent_hub.api_server._find_reply_envelope",
         lambda envelope_id: {

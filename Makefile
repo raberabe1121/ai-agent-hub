@@ -13,8 +13,6 @@ install:
 
 start:
 	@echo "🚀 AI Agent Hub を起動します..."
-	./venv/bin/python -m ai_agent_hub.lmtp_server &
-	sleep 1
 	./venv/bin/python -m ai_agent_hub.agent_worker &
 	sleep 1
 	./venv/bin/python -m ai_agent_hub.api_server &
@@ -24,7 +22,6 @@ start:
 
 stop:
 	@echo "🛑 AI Agent Hub を停止します..."
-	pkill -f "ai_agent_hub.lmtp_server" || true
 	pkill -f "ai_agent_hub.agent_worker" || true
 	pkill -f "ai_agent_hub.api_server" || true
 	@echo "✅ 停止完了"
@@ -50,7 +47,6 @@ logs:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
-	rm -f /tmp/lmtp_debug.log
 
 cleanup-processed:
 	./venv/bin/python -m ai_agent_hub.cleanup --hours $$( echo $${AI_AGENT_HUB_RETENTION_HOURS:-24} )

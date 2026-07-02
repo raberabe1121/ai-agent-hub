@@ -11,4 +11,4 @@ COPY . .
 RUN pip install -e . && \
     pip install fastapi uvicorn httpx openai
 
-CMD ["python", "-m", "ai_agent_hub.lmtp_server"]
+CMD ["python", "-m", "ai_agent_hub.api_server"]

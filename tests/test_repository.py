@@ -6,11 +6,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.lmtp_handler import save_envelope
 from ai_agent_hub.repository import (
     FileSystemRepository,
     SQLiteRepository,
     get_repository,
+    save_envelope,
 )
 
 
