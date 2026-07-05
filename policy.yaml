@@ -1,0 +1,35 @@
+rules:
+  - match:
+      intent: "cli-skill"
+    action: require_approval
+    reason: "CLI操作は人間の承認が必要"
+
+  - match:
+      intent: "payment"
+    action: require_approval
+    reason: "支払い操作は人間の承認が必要"
+
+  - match:
+      intent: "llm-query"
+    action: block_if
+    condition: daily_tokens_exceeded
+    limit: 50000
+    reason: "1日のトークン上限（50,000トークン）に達しました"
+
+  - match:
+      intent: "llm-query"
+    action: block_if
+    condition: outside_hours
+    hours: "09:00-23:00"
+    timezone: "Asia/Tokyo"
+    reason: "この時間帯はLLM呼び出しが禁止されています"
+
+  - match:
+      intent: "*"
+    action: block_if
+    condition: contains_keyword
+    keywords:
+      - "パスワード"
+      - "クレジットカード"
+      - "secret_key"
+    reason: "機密情報を含むリクエストはブロックされました"
