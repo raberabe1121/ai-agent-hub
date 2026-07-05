@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+
+import pytest
 from fastapi.testclient import TestClient
 
 import ai_agent_hub.api_server as api_server
@@ -8,6 +10,11 @@ from ai_agent_hub.api_server import app
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def disable_policy(monkeypatch):
+    monkeypatch.setattr("ai_agent_hub.api_server._policy_engine.rules", [])
 
 
 def test_post_envelopes_returns_envelope_id(monkeypatch):
