@@ -9,6 +9,9 @@ from urllib import error, parse, request
 
 import click
 
+from ai_agent_hub import Envelope
+from ai_agent_hub.policy import PolicyEngine
+
 
 DEFAULT_API_URL = "http://localhost:8080"
 DEFAULT_MODEL = "gemma3:4b"
@@ -178,6 +181,26 @@ def send(intent: str, text: str | None, model: str, wait_seconds: int, no_wait: 
     )
     click.echo("← 返信受信:")
     click.echo(f"   {json.dumps(_extract_reply_payload(reply), ensure_ascii=False)}")
+
+
+@main.command("policy-check")
+@click.option("--intent", required=True, type=str, help="評価するintent")
+@click.option("--text", type=str, default="", help="payloadのtextフィールド")
+def policy_check(intent: str, text: str) -> None:
+    """ローカルのpolicy.yamlでポリシー評価を実行する。"""
+
+    env = Envelope.new(
+        envelope_type="email",
+        sender="https://user.local/@me",
+        recipient="https://ai-agent.local/@worker",
+        payload={"intent": intent, "text": text},
+    )
+    result = PolicyEngine().evaluate(env)
+
+    click.echo(f"intent: {intent}")
+    click.echo(f"result: {result.action}")
+    if result.reason:
+        click.echo(f"reason: {result.reason}")
 
 
 @main.command()
