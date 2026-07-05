@@ -12,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.smtp_sender import send_envelope_via_smtp
+from ai_agent_hub.repository import save_envelope
 
 PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "/opt/ai-agent-hub/processed"))
 OLLAMA_CONFIG_PATH = Path("/etc/ai-agent-hub/config")
@@ -39,7 +39,7 @@ def send_and_wait(payload: dict, sender: str) -> dict | None:
         recipient="https://agent.local/@worker",
         payload=payload,
     )
-    send_envelope_via_smtp(env)
+    save_envelope(env)
     print(f"  → 送信ID: {env.id}")
     result = wait_for_reply(env.id)
     if result:

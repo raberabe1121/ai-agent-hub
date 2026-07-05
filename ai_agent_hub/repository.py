@@ -227,6 +227,12 @@ def get_repository() -> EnvelopeRepository:
     return FileSystemRepository(get_queue_dir(), get_processed_dir())
 
 
+def save_envelope(env: Envelope) -> None:
+    """Persist an envelope using the configured repository backend."""
+
+    get_repository().save(env)
+
+
 __all__ = [
     "EnvelopeRepository",
     "FileSystemRepository",
@@ -235,6 +241,7 @@ __all__ = [
     "get_storage_mode",
     "get_repository",
     "get_processed_dir",
+    "save_envelope",
     "PENDING",
     "PROCESSED",
     "FAILED",

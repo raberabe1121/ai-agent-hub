@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
-from ai_agent_hub.smtp_sender import send_envelope_via_smtp
+from ai_agent_hub.repository import save_envelope
 from ai_agent_hub.rag import RAGStore
 from ai_agent_hub.token_usage import TokenUsageStore
 import ai_agent_hub.agent_worker as agent_worker
@@ -189,7 +189,7 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         payload=payload,
         context=request.thread_id,
     )
-    send_envelope_via_smtp(env)
+    save_envelope(env)
     return {"envelope_id": env.id, "status": "queued"}
 
 
@@ -276,7 +276,7 @@ def create_approval_request(request: ApprovalCreateRequest) -> dict[str, Any]:
         },
         context=request.thread_id,
     )
-    send_envelope_via_smtp(env)
+    save_envelope(env)
 
     deadline = time.time() + 30
     while time.time() < deadline:
@@ -387,12 +387,9 @@ def health() -> dict[str, Any]:
         "processed_dir": str(PROCESSED_DIR),
         "queue_dir_exists": QUEUE_DIR.exists(),
         "processed_dir_exists": PROCESSED_DIR.exists(),
-        "smtp_host": os.environ.get("SMTP_HOST", "localhost"),
-        "smtp_port": int(os.environ.get("SMTP_PORT", "25")),
     }
     return {
         "status": "ok",
-        "lmtp": True,
         "api": True,
         "queue_dir": services["queue_dir_exists"],
         "services": services,
