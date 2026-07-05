@@ -16,7 +16,7 @@
 
 **AI Agent Hubは：**
 
-- ✅ AIエージェント間の**非同期メッセージング基盤**（queue直接書き込み・Postfix不要）
+- ✅ AIエージェント間の**非同期メッセージング基盤**（queue直接書き込み・外部サービス不要）
 - ✅ 全通信を追跡可能なログとして残す**監査レイヤー**
 - ✅ ポリシー・承認フロー・予算制御を担う**ガバナンスレイヤー**
 - ✅ fastembed + sqlite-vecによる**軽量RAG（知識ベース検索）**
@@ -80,7 +80,7 @@ AI Agent Hub ステータス
 git clone https://github.com/raberabe1121/ai-agent-os
 cd ai-agent-os
 cp .env.example .env  # OLLAMA_API_KEYを設定
-docker compose up -d
+docker compose up -d  # worker・api・ui の3サービスが起動
 ```
 
 ---
@@ -249,7 +249,7 @@ Ollama Cloud（gemma3:4b等）
 
 ```bash
 # ドキュメントを登録
-hub rag-index --text "AI Agent HubはSMTPベースのガバナンスレイヤーです" --source "readme"
+hub rag-index --text "AI Agent Hubはエージェントのガバナンスを担うメッセージング基盤です" --source "readme"
 hub rag-index --file ./docs/policy.txt --source "policy"
 
 # 検索 + LLMによる回答生成（デフォルト）
@@ -315,8 +315,8 @@ env = Envelope.new(
     payload={"text": "secret_key=abc123"},
     headers={"X-Agent-Policy": "confidential=block"},
 )
-# → Governance Milterが配送を拒否
-# → 550 Policy violation: confidential content blocked
+# → Policy Engineが配送を拒否
+# → 403 Policy violation: confidential content blocked
 ```
 
 ### X-Agent-Cost-Center による予算・レート制限
@@ -392,11 +392,11 @@ hub approve 7698e25a
 
 ### ⑤ 長期状態管理・DLQ・リトライ
 
-処理に失敗したEnvelopeはDead Letter Queueに移動し、リトライされます。PostfixがMTAとしてキューを保持するため、システムダウン中もメッセージは消えません。
+処理に失敗したEnvelopeはDead Letter Queueに移動し、リトライされます。queueはファイルシステムに永続化されるため、サービスダウン中もメッセージは消えません。
 
 ```
 処理失敗 → DLQ移動 → リトライ → 成功
-Postfixがキューを保持するため、システムダウン中もメッセージは消えない
+queueはファイルシステムに永続化されるため、サービスダウン中もメッセージは消えない
 ```
 
 ---
@@ -453,12 +453,6 @@ flowchart TD
         ECO["LangGraph / AutoGen / CrewAI"]
     end
 
-    subgraph MTA["📬 MTA Layer (Postfix)"]
-        SMTP["SMTP :25"]
-        PF["Postfix Router\n+ Governance Milter"]
-        LMTP["LMTP Server :8024"]
-    end
-
     subgraph Hub["⚙️ Governance Layer"]
         ENV["Envelope Model"]
         REPO["EnvelopeRepository\nFilesystem / SQLite"]
@@ -466,6 +460,7 @@ flowchart TD
         DLQ["Dead Letter Queue"]
         HITL["Human-in-the-Loop\nApproval Store"]
         RAG["RAG Store\nfastembed + sqlite-vec"]
+        POLICY["Policy Engine\npolicy.yaml"]
     end
 
     subgraph LLM["🧠 LLM Layer"]
@@ -476,10 +471,7 @@ flowchart TD
     CLI --> API
     SDK --> API
     ECO --> API
-    API -->|SMTP| SMTP
-    SMTP --> PF
-    PF -->|LMTP| LMTP
-    LMTP --> ENV
+    API --> ENV
     ENV --> REPO
     REPO --> WORKER
     WORKER --> OLLAMA
@@ -487,7 +479,7 @@ flowchart TD
     WORKER -->|失敗時| DLQ
     WORKER -->|承認待ち| HITL
     WORKER -->|rag-index/rag-query| RAG
-    WORKER -->|Reply| SMTP
+    WORKER -->|Reply| REPO
 ```
 
 ---
@@ -540,11 +532,9 @@ AWS AgentCore等のエンタープライズ向けAgentic AIが普及する中、
 
 ### 実装済み機能
 
-- ✅ LMTP Server（asyncio）・Envelope Model・Agent Worker
-- ✅ Dead Letter Queue・リトライ・長期状態管理
+- ✅ Envelope Model・Agent Worker・Dead Letter Queue・リトライ・長期状態管理
 - ✅ `llm-query` intent（Ollama Cloud / OpenAI）
 - ✅ EnvelopeRepository（Filesystem / SQLite）
-- ✅ Governance Milter（X-Agent-Policy / X-Agent-Cost-Center）
 - ✅ Circle/USDC Payment Gateway（dryrun）
 - ✅ Consensus Entropy Monitor（実験的）
 - ✅ CLI Skills（curl / grep / jq / gh）
@@ -555,6 +545,7 @@ AWS AgentCore等のエンタープライズ向けAgentic AIが普及する中、
 - ✅ Docker Compose対応
 - ✅ RAG（rag-index / rag-query、fastembed + sqlite-vec）
 - ✅ MTA完全削除（Postfix/SMTP依存を除去、queue直接書き込みに移行）
+- ✅ Policy Engine（policy.yamlによるintent制御・キーワードブロック・時間帯制限・トークン上限）
 - ✅ トークン計測（intent別トークン使用量の記録・集計・CLI表示）
 - ✅ LLMバイアス検知（llm-compare intent、divergence_scoreで偏りを数値化）
 - ✅ ダッシュボードUI（Next.js、Architecture/Intents/Logs/HITLタブ）
