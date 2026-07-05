@@ -2,14 +2,13 @@
 
 ### Governance Messaging Layer for AI Agents
 
-#### v0.6 | "The SMTP for the Agentic Era."
+#### v0.7 | "Governance Layer for the Agentic Era."
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Architecture: MTA-based](https://img.shields.io/badge/Architecture-MTA--based-blue)](#技術アーキテクチャ)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![Version: 0.6](https://img.shields.io/badge/Version-v0.6-green)](#ロードマップ)
+[![Version: 0.7](https://img.shields.io/badge/Version-v0.7-green)](#ロードマップ)
 
-> AIエージェントの通信・監査・ガバナンスを担う、SMTP/MIMEベースのメッセージング基盤。
+> AIエージェントの通信・監査・ガバナンスを担う、軽量・自己完結型のメッセージング基盤。
 
 ---
 
@@ -17,11 +16,12 @@
 
 **AI Agent Hubは：**
 
-- ✅ AIエージェント間の**非同期メッセージング基盤**
+- ✅ AIエージェント間の**非同期メッセージング基盤**（queue直接書き込み・Postfix不要）
 - ✅ 全通信を追跡可能なログとして残す**監査レイヤー**
 - ✅ ポリシー・承認フロー・予算制御を担う**ガバナンスレイヤー**
-- ✅ 既存のメールインフラ（Postfix）と統合可能な**配送保証レイヤー**
 - ✅ fastembed + sqlite-vecによる**軽量RAG（知識ベース検索）**
+- ✅ intent別トークン使用量の**計測・可視化**
+- ✅ 複数LLMプロバイダーの回答を比較する**LLMバイアス検知**
 
 ---
 
@@ -53,7 +53,6 @@ cd ai-agent-os
 pip install -e .
 
 # 各サービスを起動
-python -m ai_agent_hub.lmtp_server &
 python -m ai_agent_hub.agent_worker &
 python -m ai_agent_hub.api_server &
 
@@ -507,8 +506,9 @@ flowchart TD
 | バージョン | 主な機能 | 状態 |
 | --- | --- | --- |
 | **v0.5** | CLI・REST API・Python SDK・Ollama連携・Human-in-the-loop | ✅ |
-| **v0.6（現在）** | Docker Compose・RAG（fastembed + sqlite-vec）・ダッシュボードUI | ✅ |
-| **v0.7** | A2A対応・LLMバイアス検知・個人向けAgentic AI対応・LangGraph/CrewAIブリッジ | 📋 計画中 |
+| **v0.6** | Docker Compose・RAG（fastembed + sqlite-vec）・ダッシュボードUI | ✅ |
+| **v0.7（現在）** | MTA削除・LLMバイアス検知・トークン計測・ダッシュボードUI正式対応 | ✅ |
+| **v0.8** | A2A対応・LangGraph/CrewAIブリッジ・個人向けAgentic AI対応 | 📋 計画中 |
 | **v1.0** | AWS Serverless・KMS/CloudTrail統合・Enterprise対応 | 🔭 将来 |
 
 ### v0.7 詳細
@@ -554,6 +554,10 @@ AWS AgentCore等のエンタープライズ向けAgentic AIが普及する中、
 - ✅ Python SDK（`AgentHub`クラス）
 - ✅ Docker Compose対応
 - ✅ RAG（rag-index / rag-query、fastembed + sqlite-vec）
+- ✅ MTA完全削除（Postfix/SMTP依存を除去、queue直接書き込みに移行）
+- ✅ トークン計測（intent別トークン使用量の記録・集計・CLI表示）
+- ✅ LLMバイアス検知（llm-compare intent、divergence_scoreで偏りを数値化）
+- ✅ ダッシュボードUI（Next.js、Architecture/Intents/Logs/HITLタブ）
 
 ---
 
