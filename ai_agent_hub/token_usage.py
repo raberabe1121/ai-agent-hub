@@ -125,3 +125,18 @@ class TokenUsageStore:
             return dict(row) if row is not None else {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "count": 0}
         finally:
             conn.close()
+
+    def total_tokens_today(self) -> int:
+        """Return total tokens recorded today in UTC."""
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT COALESCE(SUM(total_tokens), 0) as total_tokens
+                FROM token_usage
+                WHERE date(created_at) = date('now')
+                """
+            ).fetchone()
+            return int(row["total_tokens"] if row is not None else 0)
+        finally:
+            conn.close()

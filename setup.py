@@ -6,7 +6,7 @@ setup(
     version="0.4.0",
     packages=find_packages(),
     include_package_data=True,
-    install_requires=["fastembed>=0.3.0", "sqlite-vec>=0.1.0", "pypdf>=4.0.0", "python-docx>=1.1.0", "numpy>=1.26.0"],
+    install_requires=["fastembed>=0.3.0", "sqlite-vec>=0.1.0", "pypdf>=4.0.0", "python-docx>=1.1.0", "numpy>=1.26.0", "PyYAML>=6.0"],
     entry_points={
         "console_scripts": [
             "hub=ai_agent_hub.cli:main",

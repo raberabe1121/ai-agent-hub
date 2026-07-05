@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.human_in_the_loop import ApprovalRequest, ApprovalStore
+from ai_agent_hub.policy import PolicyEngine
 from ai_agent_hub.repository import save_envelope
 from ai_agent_hub.rag import RAGStore
 from ai_agent_hub.token_usage import TokenUsageStore
@@ -26,6 +27,7 @@ QUEUE_DIR = Path(os.environ.get("AI_AGENT_HUB_QUEUE_DIR", "./queue"))
 PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed"))
 REPLIES_DIR = Path(os.environ.get("AI_AGENT_HUB_REPLIES_DIR", "./replies"))
 RAG_STORE: RAGStore | None = None
+_policy_engine = PolicyEngine(os.environ.get("AI_AGENT_HUB_POLICY_PATH", "policy.yaml"))
 
 
 def _get_rag_store() -> RAGStore:
@@ -189,6 +191,32 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
         payload=payload,
         context=request.thread_id,
     )
+    result = _policy_engine.evaluate(env)
+
+    if result.action == "block":
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "policy_violation", "reason": result.reason},
+        )
+    if result.action == "require_approval":
+        approval_env = Envelope.new(
+            envelope_type="email",
+            sender=env.sender,
+            recipient="https://ai-agent.local/@worker",
+            payload={
+                "intent": "request-approval",
+                "description": result.reason,
+                "approver": "admin@local",
+                "callback_payload": env.payload,
+            },
+        )
+        save_envelope(approval_env)
+        return {
+            "envelope_id": env.id,
+            "status": "pending_approval",
+            "reason": result.reason,
+        }
+
     save_envelope(env)
     return {"envelope_id": env.id, "status": "queued"}
 
