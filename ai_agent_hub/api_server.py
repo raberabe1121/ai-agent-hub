@@ -149,8 +149,17 @@ def _approval_store() -> ApprovalStore:
     return ApprovalStore(db_path=approval_db)
 
 
+def _magi_payload(result: Any) -> dict[str, Any] | None:
+    magi_result = getattr(result, "magi_result", None)
+    if magi_result is None:
+        return None
+    if hasattr(magi_result, "to_dict"):
+        return magi_result.to_dict()
+    return None
+
+
 @app.post("/envelopes")
-def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
+def create_envelope(request: EnvelopeRequest) -> dict[str, Any]:
     print("=== INCOMING REQUEST ===")
     if hasattr(request, "model_dump_json"):
         print(request.model_dump_json())
@@ -194,9 +203,13 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
     result = _policy_engine.evaluate(env)
 
     if result.action == "block":
+        detail: dict[str, Any] = {"error": "policy_violation", "reason": result.reason}
+        magi = _magi_payload(result)
+        if magi is not None:
+            detail["magi"] = magi
         raise HTTPException(
             status_code=403,
-            detail={"error": "policy_violation", "reason": result.reason},
+            detail=detail,
         )
     if result.action == "require_approval":
         approval_env = Envelope.new(
@@ -211,14 +224,22 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, str]:
             },
         )
         save_envelope(approval_env)
-        return {
+        response: dict[str, Any] = {
             "envelope_id": env.id,
             "status": "pending_approval",
             "reason": result.reason,
         }
+        magi = _magi_payload(result)
+        if magi is not None:
+            response["magi"] = magi
+        return response
 
     save_envelope(env)
-    return {"envelope_id": env.id, "status": "queued"}
+    response: dict[str, Any] = {"envelope_id": env.id, "status": "queued"}
+    magi = _magi_payload(result)
+    if magi is not None:
+        response["magi"] = magi
+    return response
 
 
 @app.get("/envelopes/{envelope_id}")
