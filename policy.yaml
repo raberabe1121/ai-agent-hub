@@ -1,13 +1,13 @@
 rules:
   - match:
       intent: "cli-skill"
-    action: require_approval
-    reason: "CLI操作は人間の承認が必要"
+    action: magi_vote
+    reason: "マギシステムで評価します"
 
   - match:
       intent: "payment"
-    action: require_approval
-    reason: "支払い操作は人間の承認が必要"
+    action: magi_vote
+    reason: "マギシステムで評価します"
 
   - match:
       intent: "llm-query"
