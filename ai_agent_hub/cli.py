@@ -10,6 +10,7 @@ from urllib import error, parse, request
 import click
 
 from ai_agent_hub import Envelope
+from ai_agent_hub.magi import MagiSystem
 from ai_agent_hub.policy import PolicyEngine
 
 
@@ -201,6 +202,20 @@ def policy_check(intent: str, text: str) -> None:
     click.echo(f"result: {result.action}")
     if result.reason:
         click.echo(f"reason: {result.reason}")
+
+
+@main.command("magi-evaluate")
+@click.option("--intent", required=True, type=str, help="評価するintent")
+@click.option("--text", required=True, type=str, help="評価するpayloadのtextフィールド")
+def magi_evaluate(intent: str, text: str) -> None:
+    """マギシステムでアクションを合議評価する。"""
+
+    result = MagiSystem().evaluate(intent, text)
+    for vote in result.votes:
+        icon = "🟢" if vote.decision == "ALLOW" else "🔴"
+        click.echo(f"{icon} {vote.persona:<10}: {vote.decision:<5} — {vote.reason}")
+    click.echo("─────────────────────────────")
+    click.echo(f"最終判断: {result.final}（{result.allow_count}-{result.deny_count}）")
 
 
 @main.command()

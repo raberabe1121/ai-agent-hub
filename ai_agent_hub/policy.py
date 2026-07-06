@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from datetime import datetime, time
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ class PolicyResult:
     action: str  # "pass" | "block" | "require_approval"
     reason: str = ""
     matched_rule: dict | None = None
+    magi_result: Any | None = None
 
 
 class PolicyEngine:
@@ -94,10 +96,30 @@ class PolicyEngine:
             reason = str(rule.get("reason") or "")
             if action == "require_approval":
                 return PolicyResult(False, "require_approval", reason, rule)
+            if action == "magi_vote":
+                return self._evaluate_magi_vote(rule, envelope)
             if action == "block_if":
                 return self._evaluate_block_if(rule, envelope)
 
         return PolicyResult(True, "pass")
+
+
+    def _evaluate_magi_vote(self, rule: dict[str, Any], envelope: Any) -> PolicyResult:
+        reason = str(rule.get("reason") or "")
+        if os.environ.get("MAGI_ENABLED", "false").strip().lower() != "true":
+            return PolicyResult(False, "require_approval", reason, rule)
+
+        from ai_agent_hub.magi import MagiSystem
+
+        intent = self._intent(envelope) or ""
+        text = self._text(envelope)
+        magi_result = MagiSystem().evaluate(intent, text)
+        if magi_result.final == "ALLOW":
+            return PolicyResult(True, "pass", matched_rule=rule, magi_result=magi_result)
+        vote_reasons = "; ".join(
+            f"{vote.persona}: {vote.decision} - {vote.reason}" for vote in magi_result.votes
+        )
+        return PolicyResult(False, "block", vote_reasons or reason, rule, magi_result)
 
     def _matches(self, match: Any, envelope: Any) -> bool:
         if not isinstance(match, dict):
@@ -129,6 +151,13 @@ class PolicyEngine:
             value = payload.get("intent")
             return str(value) if value is not None else None
         return None
+
+    def _text(self, envelope: Any) -> str:
+        payload = getattr(envelope, "payload", None)
+        if isinstance(payload, dict):
+            value = payload.get("text")
+            return str(value) if value is not None else ""
+        return ""
 
     def _is_outside_hours(self, rule: dict[str, Any]) -> bool:
         hours = str(rule.get("hours") or "")
