@@ -41,10 +41,16 @@ def test_magi_deny_when_2_deny(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.deny_count == 2
 
 
-def test_magi_deny_on_parse_failure() -> None:
-    vote = MagiSystem()._call_persona_sync("MELCHIOR", "system", "cli-skill", "echo hello")
+def test_magi_deny_on_parse_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_call(_prompt: str) -> str:
+        raise ValueError("parse error")
+
+    system = MagiSystem()
+    monkeypatch.setattr(system, "_call_llm", mock_call)
+    vote = system._call_persona_sync("MELCHIOR", "system", "cli-skill", "echo hello")
 
     assert vote.decision == "DENY"
+    assert vote.reason == "判断不能のためDENY"
 
 
 def test_magi_vote_in_policy(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

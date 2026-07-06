@@ -128,29 +128,33 @@ Content: {text}
 """.strip()
 
         try:
-            httpx = importlib.import_module("httpx")
-            api_key = os.environ.get("OLLAMA_API_KEY")
-            if not api_key:
-                return MagiVote(persona_name, "DENY", "OLLAMA_API_KEYが未設定のため評価できません")
-            response = httpx.post(
-                "https://api.ollama.com/api/chat",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                },
-                timeout=self.timeout_seconds,
-            )
-            response.raise_for_status()
-            data = response.json()
-            content = data.get("message", {}).get("content")
-            if not isinstance(content, str):
-                raise ValueError("Ollama response did not include message.content")
+            content = self._call_llm(prompt)
             parsed = self._parse_response(content)
             return MagiVote(persona_name, parsed["decision"], parsed["reason"])
         except Exception:
-            return MagiVote(persona_name, "DENY", "レスポンスの解析に失敗したため安全側でDENYしました")
+            return MagiVote(persona_name, "DENY", "判断不能のためDENY")
+
+    def _call_llm(self, prompt: str) -> str:
+        httpx = importlib.import_module("httpx")
+        api_key = os.environ.get("OLLAMA_API_KEY")
+        if not api_key:
+            raise RuntimeError("OLLAMA_API_KEY is not set")
+        response = httpx.post(
+            "https://api.ollama.com/api/chat",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            },
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("message", {}).get("content")
+        if not isinstance(content, str):
+            raise ValueError("Ollama response did not include message.content")
+        return content
 
     def _parse_response(self, content: str) -> dict[str, str]:
         stripped = content.strip()
@@ -159,8 +163,8 @@ Content: {text}
             if stripped.lower().startswith("json"):
                 stripped = stripped[4:].strip()
         data = json.loads(stripped)
-        decision = str(data.get("decision", "")).upper()
+        decision = str(data.get("decision", "DENY")).upper()
+        if decision not in {"ALLOW", "DENY"}:
+            decision = "DENY"
         reason = str(data.get("reason", "")).strip()
-        if decision not in {"ALLOW", "DENY"} or not reason:
-            raise ValueError("invalid Magi response")
         return {"decision": decision, "reason": reason}
