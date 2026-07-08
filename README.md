@@ -48,8 +48,8 @@ AIを業務に導入する際の最大の障壁は「知能の欠如」ではな
 ### systemd方式
 
 ```bash
-git clone https://github.com/raberabe1121/ai-agent-os.git
-cd ai-agent-os
+git clone https://github.com/raberabe1121/ai-agent-hub.git
+cd ai-agent-hub
 pip install -e .
 
 # 各サービスを起動
@@ -77,8 +77,8 @@ AI Agent Hub ステータス
 ### Docker Compose方式
 
 ```bash
-git clone https://github.com/raberabe1121/ai-agent-os
-cd ai-agent-os
+git clone https://github.com/raberabe1121/ai-agent-hub
+cd ai-agent-hub
 cp .env.example .env  # OLLAMA_API_KEYを設定
 docker compose up -d  # worker・api・ui の3サービスが起動
 ```
@@ -192,9 +192,9 @@ for log in logs:
     print(f"{log.time} | {log.intent} | {log.payload}")
 ```
 
-詳細は [examples/quickstart.py](https://github.com/raberabe1121/ai-agent-os/blob/main/examples/quickstart.py) を参照してください。
+詳細は [examples/quickstart.py](https://github.com/raberabe1121/ai-agent-hub/blob/main/examples/quickstart.py) を参照してください。
 
-API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](https://github.com/raberabe1121/ai-agent-os/blob/main/docs/python-sdk-api-reference.md) を参照してください。
+API仕様の詳細は [AI Agent Hub Python SDK — APIリファレンス](https://github.com/raberabe1121/ai-agent-hub/blob/main/docs/python-sdk-api-reference.md) を参照してください。
 
 ---
 
@@ -554,4 +554,4 @@ AWS AgentCore等のエンタープライズ向けAgentic AIが普及する中、
 
 ## ライセンス
 
-MIT — 詳細は [LICENSE](https://github.com/raberabe1121/ai-agent-os/blob/main/LICENSE) を参照してください。
+MIT — 詳細は [LICENSE](https://github.com/raberabe1121/ai-agent-hub/blob/main/LICENSE) を参照してください。
