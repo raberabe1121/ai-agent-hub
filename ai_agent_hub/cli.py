@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
@@ -12,6 +14,7 @@ import click
 from ai_agent_hub import Envelope
 from ai_agent_hub.magi import MagiSystem
 from ai_agent_hub.policy import PolicyEngine
+from ai_agent_hub.rag import RAGStore
 
 
 DEFAULT_API_URL = "http://localhost:8080"
@@ -143,6 +146,45 @@ def _api_call_with_fallback(method: str, primary_url: str, fallback_url: str, *,
         if "API error (404)" not in message:
             raise
         return _api_call(method, fallback_url, payload=payload, timeout=timeout)
+
+
+HANDOFF_PROMPT = """以下は今日の作業セッションの会話ログです。
+これを元に、別のAIエンジニアが作業を引き継げるよう
+Markdown形式でまとめてください。
+
+含めること:
+- 今日やったこと（完了事項）
+- 未完了・途中の作業
+- 重要なコンテキスト・決定事項
+- 次にやるべきこと
+
+会話ログ:
+{logs}
+"""
+
+
+def _sqlite_path() -> str:
+    return os.environ.get(
+        "AI_AGENT_HUB_SQLITE_PATH",
+        os.environ.get("AI_AGENT_HUB_DB_PATH", "./agent_hub.db"),
+    )
+
+
+def _generate_handoff(logs: str, model: str) -> str:
+    from ai_agent_hub.agent_worker import _handle_llm_query
+
+    env = Envelope.new(
+        envelope_type="command",
+        sender="https://user.local/@me",
+        recipient="https://ai-agent.local/@worker",
+        payload={"intent": "llm-query", "text": HANDOFF_PROMPT.format(logs=logs), "model": model},
+    )
+    response = _handle_llm_query(env)
+    result = response.get("result") if isinstance(response, dict) else None
+    if not isinstance(result, str) or not result.strip():
+        detail = response.get("error", "LLMから回答がありません") if isinstance(response, dict) else "invalid response"
+        raise click.ClickException(f"引き継ぎドキュメントの生成に失敗しました: {detail}")
+    return result
 
 
 @click.group(help="AI Agent Hub CLI")
@@ -313,6 +355,45 @@ def pending(api_url: str) -> None:
         approver = item.get("approver", "-")
         click.echo(f"  [{short_id}] {description}")
         click.echo(f"             approver: {approver}")
+
+
+@main.command()
+@click.option("--date", "session_date", type=str, default=None, help="対象日 (YYYY-MM-DD)")
+@click.option("--days", type=click.IntRange(min=1), default=None, help="今日を含む過去N日分")
+@click.option("--model", type=str, default=DEFAULT_MODEL, show_default=True, help="LLMモデル名")
+def handoff(session_date: str | None, days: int | None, model: str) -> None:
+    """セッションログから引き継ぎMarkdownを生成する。"""
+    if session_date is not None and days is not None:
+        raise click.UsageError("--date と --days は同時に指定できません")
+
+    if session_date is not None:
+        try:
+            end_date = datetime.strptime(session_date, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise click.BadParameter("YYYY-MM-DD形式で指定してください", param_hint="--date") from exc
+        target_dates = [end_date]
+    else:
+        end_date = date.today()
+        count = days or 1
+        target_dates = [end_date - timedelta(days=offset) for offset in reversed(range(count))]
+
+    store = RAGStore(_sqlite_path())
+    documents: list[dict[str, Any]] = []
+    for target_date in target_dates:
+        documents.extend(store.get_documents_by_source(f"session/{target_date.isoformat()}"))
+
+    if not documents:
+        date_label = target_dates[0].isoformat() if len(target_dates) == 1 else f"{target_dates[0]}〜{target_dates[-1]}"
+        raise click.ClickException(f"対象期間（{date_label}）のセッションログがありません")
+
+    logs = "\n\n".join(
+        f"[{item.get('source', '')}]\n{item.get('content', '')}" for item in documents
+    )
+    markdown = _generate_handoff(logs, model)
+    output_path = Path(f"/tmp/handoff-{end_date.isoformat()}.md")
+    output_path.write_text(markdown, encoding="utf-8")
+    click.echo(markdown)
+    click.echo(f"\n保存先: {output_path}")
 
 
 @main.command()

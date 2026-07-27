@@ -165,6 +165,43 @@ class RAGStore:
             results = [r for r in results if r["distance"] <= max_distance]
         return results
 
+    def get_documents_by_source(self, source_pattern: str) -> list[dict[str, Any]]:
+        """Return documents whose source matches a SQL LIKE pattern."""
+        self._ensure_tables()
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, content, source, metadata, created_at
+                FROM rag_documents
+                WHERE source LIKE ?
+                ORDER BY created_at, id
+                """,
+                (source_pattern,),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            raw_metadata = row["metadata"]
+            metadata = None
+            if isinstance(raw_metadata, str) and raw_metadata:
+                try:
+                    metadata = json.loads(raw_metadata)
+                except json.JSONDecodeError:
+                    metadata = raw_metadata
+            results.append(
+                {
+                    "id": row["id"],
+                    "content": row["content"],
+                    "source": row["source"],
+                    "metadata": metadata,
+                    "created_at": row["created_at"],
+                }
+            )
+        return results
+
     def delete_document(self, doc_id: int) -> bool:
         self._ensure_tables()
         conn = self._get_conn()

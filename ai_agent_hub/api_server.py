@@ -6,7 +6,7 @@ import json
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +33,11 @@ _policy_engine = PolicyEngine(os.environ.get("AI_AGENT_HUB_POLICY_PATH", "policy
 def _get_rag_store() -> RAGStore:
     global RAG_STORE
     if RAG_STORE is None:
-        RAG_STORE = RAGStore(os.environ.get("AI_AGENT_HUB_DB_PATH", "agent_hub.db"))
+        db_path = os.environ.get(
+            "AI_AGENT_HUB_SQLITE_PATH",
+            os.environ.get("AI_AGENT_HUB_DB_PATH", "agent_hub.db"),
+        )
+        RAG_STORE = RAGStore(db_path)
     return RAG_STORE
 
 
@@ -411,6 +415,14 @@ def rag_query(request: RagQueryRequest) -> dict[str, Any]:
         else:
             response["answer"] = ""
     return response
+
+
+@app.get("/session/context")
+def get_session_context() -> dict[str, Any]:
+    session_date = date.today().isoformat()
+    source = f"session/{session_date}"
+    documents = _get_rag_store().get_documents_by_source(source)
+    return {"date": session_date, "source": source, "documents": documents}
 
 @app.get("/token-usage")
 def get_token_usage() -> dict[str, Any]:
