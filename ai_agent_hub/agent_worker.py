@@ -8,7 +8,7 @@ import importlib
 import os
 import textwrap
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
 from xml.etree import ElementTree
@@ -603,9 +603,31 @@ def _handle_llm_query(env: Envelope) -> dict:
     model = _provider_model(provider, payload)
 
     if provider == "openai":
-        return _query_openai(text, model)
+        response = _query_openai(text, model)
+    else:
+        response = _query_ollama(text, model, payload, envelope_id=env.id, intent=str(payload.get("intent", "llm-query")))
 
-    return _query_ollama(text, model, payload, envelope_id=env.id, intent=str(payload.get("intent", "llm-query")))
+    result = response.get("result")
+    if isinstance(result, str):
+        _auto_save_context("llm-query", text, result)
+    return response
+
+
+def _auto_save_context(intent: str, query: str, answer: str) -> None:
+    """Save a successful conversation to RAG without affecting the response."""
+    try:
+        if os.environ.get("AI_AGENT_HUB_AUTO_CONTEXT", "true").lower() != "true":
+            return
+        db_path = os.environ.get(
+            "AI_AGENT_HUB_SQLITE_PATH",
+            os.environ.get("AI_AGENT_HUB_DB_PATH", "./agent_hub.db"),
+        )
+        store = RAGStore(db_path)
+        source = f"session/{date.today().isoformat()}"
+        content = f"Q: {query}\nA: {answer}"
+        store.add_document(content=content, source=source)
+    except Exception:
+        pass
 
 
 def _embed_texts(texts: Sequence[str]) -> list[list[float]]:
@@ -713,7 +735,10 @@ def _llm_json_response(prompt: str, model: str = "gemma3:4b") -> dict[str, Any]:
 
 
 def _get_rag_store() -> RAGStore:
-    db_path = os.environ.get("AI_AGENT_HUB_DB_PATH", "agent_hub.db")
+    db_path = os.environ.get(
+        "AI_AGENT_HUB_SQLITE_PATH",
+        os.environ.get("AI_AGENT_HUB_DB_PATH", "agent_hub.db"),
+    )
     return RAGStore(db_path)
 
 
