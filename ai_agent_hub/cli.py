@@ -547,28 +547,64 @@ def _read_rag_index_file(file_path: str) -> str:
     raise click.ClickException("未対応のファイル形式です。対応: .txt .md .pdf .docx")
 
 
+def _read_rag_index_url(url: str, *, chunk_by_section: bool = False) -> str:
+    import requests
+    from bs4 import BeautifulSoup
+
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise click.ClickException(f"Webページの取得に失敗しました: {exc}") from exc
+
+    soup = BeautifulSoup(response.content, "html.parser")
+    for tag in soup(["script", "style", "nav"]):
+        tag.decompose()
+
+    content = soup.find("main") or soup.find("article") or soup.body or soup
+    if chunk_by_section:
+        for heading in content.find_all(["h2", "h3"]):
+            level = "##" if heading.name == "h2" else "###"
+            heading.replace_with(f"\n{level} {heading.get_text(' ', strip=True)}\n")
+
+    return content.get_text("\n", strip=True)
+
+
 @main.command("rag-index")
 @click.option("--text", type=str, default=None, help="インデックスするテキスト")
 @click.option("--file", "file_path", type=click.Path(exists=True), default=None, help="インデックスするファイル")
+@click.option("--url", default=None, help="WebページのURLを指定してインデックス")
 @click.option("--source", type=str, default=None, help="ソース名")
 @click.option("--chunk-by-section", is_flag=True, default=False, help="Markdownの##見出しごとに分割してインデックス")
 @click.option("--api-url", type=str, default=DEFAULT_API_URL, show_default=True, help="APIサーバーのURL")
-def rag_index(text: str | None, file_path: str | None, source: str | None, chunk_by_section: bool, api_url: str) -> None:
-    if not text and not file_path:
-        raise click.ClickException("--text または --file のどちらかが必要です")
-    if text and file_path:
-        raise click.ClickException("--text と --file は同時に指定できません")
+def rag_index(
+    text: str | None,
+    file_path: str | None,
+    url: str | None,
+    source: str | None,
+    chunk_by_section: bool,
+    api_url: str,
+) -> None:
+    inputs = [value for value in (text, file_path, url) if value]
+    if not inputs:
+        raise click.ClickException("--text、--file、--url のいずれかが必要です")
+    if len(inputs) > 1:
+        raise click.ClickException("--text、--file、--url は同時に指定できません")
 
     content = text
     if file_path:
         content = _read_rag_index_file(file_path)
         if not source:
             source = file_path
+    elif url:
+        content = _read_rag_index_url(url, chunk_by_section=chunk_by_section)
+        if not source:
+            source = url
 
     base = _normalize_url(api_url)
 
-    if chunk_by_section and file_path and Path(file_path).suffix.lower() == ".md":
-        effective_source = source or file_path
+    if chunk_by_section and (url or (file_path and Path(file_path).suffix.lower() == ".md")):
+        effective_source = source or url or file_path
         chunks = _split_markdown_sections(content or "")
         if not chunks:
             raise click.ClickException("Markdownをセクション分割しましたが、インデックス可能な本文がありません")
