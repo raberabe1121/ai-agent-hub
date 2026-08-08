@@ -224,6 +224,57 @@ def test_rag_index_reads_docx(monkeypatch, tmp_path):
     assert captured["payload"]["text"] == "line1\nline2"
 
 
+def test_rag_index_reads_url_and_uses_url_as_source(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        content = b"<html><body><nav>menu</nav><main><h1>Title</h1><p>Web content</p></main><script>bad()</script></body></html>"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_api_call(method, url, **kwargs):
+        captured["payload"] = kwargs.get("payload")
+        return {"status": "indexed", "doc_id": 1}
+
+    monkeypatch.setattr("requests.get", lambda url, timeout: FakeResponse())
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    page_url = "https://example.com/docs"
+    result = runner.invoke(cli.main, ["rag-index", "--url", page_url])
+
+    assert result.exit_code == 0
+    assert "Title" in captured["payload"]["text"]
+    assert "Web content" in captured["payload"]["text"]
+    assert "menu" not in captured["payload"]["text"]
+    assert "bad()" not in captured["payload"]["text"]
+    assert captured["payload"]["source"] == page_url
+
+
+def test_rag_index_url_chunk_by_section(monkeypatch):
+    captured = []
+
+    class FakeResponse:
+        content = ("<main><h2>Section A</h2><p>" + "a" * 60 + "</p><h3>Section B</h3><p>" + "b" * 60 + "</p></main>").encode()
+
+        def raise_for_status(self):
+            return None
+
+    def fake_api_call(method, url, **kwargs):
+        captured.append(kwargs.get("payload"))
+        return {"status": "indexed", "doc_id": len(captured)}
+
+    monkeypatch.setattr("requests.get", lambda url, timeout: FakeResponse())
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    page_url = "https://example.com/docs"
+    result = runner.invoke(cli.main, ["rag-index", "--url", page_url, "--chunk-by-section"])
+
+    assert result.exit_code == 0
+    assert [item["source"] for item in captured] == [f"{page_url}#Section A", f"{page_url}#Section B"]
+    assert captured[0]["embedding_text"].startswith("Section A\n")
+
+
 def test_rag_index_chunk_by_section_markdown(monkeypatch, tmp_path):
     captured = []
 
