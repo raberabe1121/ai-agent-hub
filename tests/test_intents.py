@@ -2,6 +2,7 @@ import pytest
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.agent_worker import INTENT_HANDLERS
+from ai_agent_hub.repository import FileSystemRepository
 
 
 def _make_env(payload) -> Envelope:
@@ -111,3 +112,15 @@ def test_unknown_intent(enqueue, process_once, sent_envelopes, queue_dirs):
     reply = sent_envelopes[0]
     _assert_reply_structure(reply, env)
     assert reply.payload == {"error": "unknown intent", "status": "failed"}
+
+
+def test_mark_processed_tolerates_file_claimed_by_another_worker(monkeypatch, queue_dirs):
+    import ai_agent_hub.agent_worker as agent_worker
+
+    queue_dir, _ = queue_dirs
+    repository = FileSystemRepository(queue_dir)
+    missing_path = queue_dir / "already-moved.json"
+    monkeypatch.setattr(repository, "find_file_by_id", lambda env_id: missing_path)
+    monkeypatch.setattr(agent_worker, "get_repository", lambda: repository)
+
+    agent_worker._mark_processed("already-moved")

@@ -33,6 +33,19 @@ def test_hub_status_exits_success(monkeypatch):
     assert "API Server" in result.output
 
 
+def test_api_timeout_is_reported_without_traceback(monkeypatch):
+    def raise_timeout(*args, **kwargs):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(cli.request, "urlopen", raise_timeout)
+
+    result = runner.invoke(cli.main, ["status"])
+
+    assert result.exit_code != 0
+    assert "API応答がタイムアウトしました（30秒）" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_hub_send_ping_prints_envelope_id(monkeypatch):
     def fake_api_call(method, url, **kwargs):
         if method == "POST":
