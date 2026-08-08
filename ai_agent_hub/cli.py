@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,8 @@ def _api_call(
         raise click.ClickException(f"API error ({exc.code}): {detail}") from exc
     except error.URLError as exc:
         raise click.ClickException(f"API接続に失敗しました: {exc.reason}") from exc
+    except (TimeoutError, socket.timeout) as exc:
+        raise click.ClickException(f"API応答がタイムアウトしました（{timeout}秒）: {full_url}") from exc
 
 
 def _extract_reply_payload(reply: Any) -> Any:

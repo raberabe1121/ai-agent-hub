@@ -1034,7 +1034,11 @@ def _mark_processed(env_id: str) -> None:
             return
         PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
         destination = PROCESSED_DIR / file_path.name
-        file_path.rename(destination)
+        try:
+            file_path.rename(destination)
+        except FileNotFoundError:
+            # Another worker may have claimed and moved the same queue file.
+            return
 
 
 def _mark_failed(env_id: str) -> None:

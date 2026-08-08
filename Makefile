@@ -13,10 +13,19 @@ install:
 
 start:
 	@echo "🚀 AI Agent Hub を起動します..."
-	./venv/bin/python -m ai_agent_hub.agent_worker &
-	sleep 1
-	./venv/bin/python -m ai_agent_hub.api_server &
-	sleep 2
+	@if pgrep -f "[p]ython.*-m ai_agent_hub.agent_worker" >/dev/null; then \
+		echo "  Worker: already running"; \
+	else \
+		./venv/bin/python -m ai_agent_hub.agent_worker & \
+		echo "  Worker: started"; \
+	fi
+	@if pgrep -f "[p]ython.*-m ai_agent_hub.api_server" >/dev/null; then \
+		echo "  API:    already running"; \
+	else \
+		./venv/bin/python -m ai_agent_hub.api_server & \
+		echo "  API:    started"; \
+	fi
+	@sleep 2
 	@echo "✅ 起動完了"
 	@echo "  API: http://localhost:8080/health"
 
