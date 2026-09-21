@@ -71,6 +71,7 @@ def test_hub_send_pending_approval_does_not_poll_for_a_reply(monkeypatch):
         if method == "POST":
             return {
                 "envelope_id": "env-approval",
+                "approval_id": "approval-123",
                 "status": "pending_approval",
                 "reason": "CLI操作は人間の承認が必要",
             }
@@ -83,7 +84,8 @@ def test_hub_send_pending_approval_does_not_poll_for_a_reply(monkeypatch):
     assert result.exit_code == 0
     assert calls == [("POST", "http://localhost:8080/envelopes")]
     assert "承認待ち" in result.output
-    assert "hub pending" in result.output
+    assert "承認ID: approval-123" in result.output
+    assert "hub approve approval-123" in result.output
 
 
 def test_hub_pending_lists_items(monkeypatch):

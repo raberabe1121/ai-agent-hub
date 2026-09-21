@@ -223,10 +223,15 @@ def send(intent: str, text: str | None, model: str, wait_seconds: int, no_wait: 
         reason = created.get("reason")
         if isinstance(reason, str) and reason:
             click.echo(f"   {reason}")
-        click.echo(
-            "   承認IDは `hub pending` で確認し、"
-            "`hub approve <approval-id>` で承認できます。"
-        )
+        approval_id = created.get("approval_id")
+        if isinstance(approval_id, str) and approval_id:
+            click.echo(f"   承認ID: {approval_id}")
+            click.echo(f"   承認するには: hub approve {approval_id}")
+        else:
+            click.echo(
+                "   承認IDは `hub pending` で確認し、"
+                "`hub approve <approval-id>` で承認できます。"
+            )
         return
     if no_wait:
         return

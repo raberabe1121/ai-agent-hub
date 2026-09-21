@@ -251,6 +251,10 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, Any]:
         save_envelope(approval_env)
         response: dict[str, Any] = {
             "envelope_id": env.id,
+            # The approval request has its own envelope ID.  It is created
+            # synchronously here, so callers can approve it without having to
+            # enumerate pending approvals first.
+            "approval_id": approval_env.id,
             "status": "pending_approval",
             "reason": result.reason,
         }

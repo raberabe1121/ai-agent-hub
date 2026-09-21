@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 import ai_agent_hub.api_server as api_server
 from ai_agent_hub.api_server import app
-from ai_agent_hub.policy import PolicyEngine
+from ai_agent_hub.policy import PolicyEngine, PolicyResult
 
 
 client = TestClient(app)
@@ -125,6 +125,28 @@ def test_post_cli_skill_expands_json_text_into_worker_payload(monkeypatch):
         "skill": "echo",
         "args": ["hello"],
     }
+
+
+def test_post_envelopes_returns_approval_id_when_policy_requires_approval(monkeypatch):
+    saved = []
+
+    class _ApprovalPolicy:
+        def evaluate(self, env):
+            return PolicyResult(
+                allowed=False,
+                action="require_approval",
+                reason="CLI操作は人間の承認が必要",
+            )
+
+    monkeypatch.setattr(api_server, "_policy_engine", _ApprovalPolicy())
+    monkeypatch.setattr(api_server, "save_envelope", saved.append)
+
+    response = api_server.create_envelope(
+        api_server.EnvelopeRequest(intent="cli-skill", text='{"skill": "rm", "args": ["-rf", "/tmp/test"]}')
+    )
+
+    assert response["status"] == "pending_approval"
+    assert response["approval_id"] == saved[0].id
 
 
 def test_get_health_returns_ok():
