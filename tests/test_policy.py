@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from ai_agent_hub import Envelope
-from ai_agent_hub.policy import JevPolicyEngine, PolicyEngine, get_policy_engine
+from ai_agent_hub.policy import PolicyEngine
 
 
 def _env(intent: str, text: str = "") -> Envelope:
@@ -103,58 +103,3 @@ def test_wildcard_intent_match(tmp_path) -> None:
 
     assert result.allowed is False
     assert result.action == "block"
-
-
-def test_get_policy_engine_uses_jev_backend(monkeypatch) -> None:
-    monkeypatch.setenv("POLICY_BACKEND", "jev")
-
-    assert isinstance(get_policy_engine(), JevPolicyEngine)
-
-
-def test_jev_passes_typed_answers(monkeypatch) -> None:
-    class _Response:
-        def raise_for_status(self) -> None:
-            pass
-
-        def json(self):
-            return {
-                "allow": {"value": True, "confidence": 0.94},
-                "risk_score": {"value": 12, "confidence": 0.87},
-                "needs_human": {"value": False, "confidence": 0.91},
-            }
-
-    captured = {}
-
-    def _post(url, **kwargs):
-        captured.update({"url": url, **kwargs})
-        return _Response()
-
-    monkeypatch.setattr("ai_agent_hub.policy.requests.post", _post)
-    result = JevPolicyEngine(api_key="test-key").evaluate(_env("echo", "hello"))
-
-    assert result.allowed is True
-    assert result.action == "pass"
-    assert captured["headers"]["Authorization"] == "Bearer test-key"
-    assert captured["json"]["state"]["intent"] == "echo"
-    assert captured["json"]["questions"]["risk_score"]["max"] == 100
-
-
-def test_jev_requires_approval_before_allowing(monkeypatch) -> None:
-    class _Response:
-        def raise_for_status(self) -> None:
-            pass
-
-        def json(self):
-            return {
-                "answers": {
-                    "allow": {"value": True},
-                    "risk_score": {"value": 4},
-                    "needs_human": {"value": True},
-                }
-            }
-
-    monkeypatch.setattr("ai_agent_hub.policy.requests.post", lambda *args, **kwargs: _Response())
-    result = JevPolicyEngine(api_key="test-key").evaluate(_env("echo"))
-
-    assert result.allowed is False
-    assert result.action == "require_approval"

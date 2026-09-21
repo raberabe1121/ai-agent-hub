@@ -14,6 +14,7 @@ setup(
         "numpy>=1.26.0",
         "PyYAML>=6.0",
         "requests>=2.31.0",
+        "typesafe-sdk>=0.7.1",
         "beautifulsoup4>=4.12.0",
     ],
     entry_points={

@@ -27,7 +27,7 @@ QUEUE_DIR = Path(os.environ.get("AI_AGENT_HUB_QUEUE_DIR", "./queue"))
 PROCESSED_DIR = Path(os.environ.get("AI_AGENT_HUB_PROCESSED_DIR", "./processed"))
 REPLIES_DIR = Path(os.environ.get("AI_AGENT_HUB_REPLIES_DIR", "./replies"))
 RAG_STORE: RAGStore | None = None
-_policy_engine = get_policy_engine(os.environ.get("AI_AGENT_HUB_POLICY_PATH", "policy.yaml"))
+_policy_engine = get_policy_engine()
 
 
 def _get_rag_store() -> RAGStore:
