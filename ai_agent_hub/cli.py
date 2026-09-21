@@ -14,7 +14,7 @@ import click
 
 from ai_agent_hub import Envelope
 from ai_agent_hub.magi import MagiSystem
-from ai_agent_hub.policy import PolicyEngine
+from ai_agent_hub.policy import get_policy_engine
 from ai_agent_hub.rag import RAGStore
 
 
@@ -241,7 +241,7 @@ def policy_check(intent: str, text: str) -> None:
         recipient="https://ai-agent.local/@worker",
         payload={"intent": intent, "text": text},
     )
-    result = PolicyEngine().evaluate(env)
+    result = get_policy_engine().evaluate(env)
 
     click.echo(f"intent: {intent}")
     click.echo(f"result: {result.action}")

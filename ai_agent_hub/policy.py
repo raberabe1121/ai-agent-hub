@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import requests
+
 try:
     import yaml
 except ModuleNotFoundError:  # pragma: no cover - dependency fallback
@@ -23,6 +25,107 @@ class PolicyResult:
     reason: str = ""
     matched_rule: dict | None = None
     magi_result: Any | None = None
+    jev_result: dict[str, Any] | None = None
+
+
+class JevPolicyEngine:
+    """Evaluate policy decisions through the Jev TypeSafe AI API."""
+
+    endpoint = "https://api.typesafe.ai/v1/systemone"
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        endpoint: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        self.api_key = api_key if api_key is not None else os.environ.get("JEV_API_KEY")
+        self.endpoint = endpoint or os.environ.get("JEV_API_URL", self.endpoint)
+        self.timeout = timeout
+
+    def evaluate(self, envelope: Any) -> PolicyResult:
+        """Return a safe policy decision based on Jev's typed answers."""
+        if not self.api_key:
+            return PolicyResult(False, "require_approval", "JEV_API_KEY is not configured")
+
+        payload = {
+            "state": {
+                "intent": self._intent(envelope),
+                "text": self._text(envelope),
+                "sender": str(getattr(envelope, "sender", "")),
+            },
+            "questions": {
+                "allow": {
+                    "type": "boolean",
+                    "question": "このAIエージェントのリクエストを許可すべきか？",
+                },
+                "risk_score": {
+                    "type": "score",
+                    "question": "このリクエストのリスクレベルは？",
+                    "min": 0,
+                    "max": 100,
+                },
+                "needs_human": {
+                    "type": "boolean",
+                    "question": "人間の承認が必要か？",
+                },
+            },
+        }
+        try:
+            response = requests.post(
+                self.endpoint,
+                json=payload,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except (requests.RequestException, ValueError) as exc:
+            return PolicyResult(False, "require_approval", f"Jev evaluation failed: {exc}")
+
+        answers = data.get("answers", data) if isinstance(data, dict) else None
+        if not isinstance(answers, dict):
+            return PolicyResult(False, "require_approval", "Jev returned an invalid response")
+
+        allow = self._answer_value(answers.get("allow"))
+        needs_human = self._answer_value(answers.get("needs_human"))
+        risk_score = self._answer_value(answers.get("risk_score"))
+        if not isinstance(allow, bool) or not isinstance(needs_human, bool):
+            return PolicyResult(False, "require_approval", "Jev returned incomplete policy answers", jev_result=answers)
+
+        reason = f"Jev risk score: {risk_score}" if risk_score is not None else "Jev policy evaluation"
+        if needs_human:
+            return PolicyResult(False, "require_approval", reason, jev_result=answers)
+        if not allow:
+            return PolicyResult(False, "block", reason, jev_result=answers)
+        return PolicyResult(True, "pass", reason, jev_result=answers)
+
+    @staticmethod
+    def _answer_value(answer: Any) -> Any:
+        return answer.get("value") if isinstance(answer, dict) else None
+
+    @staticmethod
+    def _intent(envelope: Any) -> str | None:
+        payload = getattr(envelope, "payload", None)
+        if isinstance(payload, dict):
+            value = payload.get("intent")
+            return str(value) if value is not None else None
+        return None
+
+    @staticmethod
+    def _text(envelope: Any) -> str:
+        payload = getattr(envelope, "payload", None)
+        if isinstance(payload, dict):
+            value = payload.get("text")
+            return str(value) if value is not None else ""
+        return ""
+
+
+def get_policy_engine(policy_path: str = "policy.yaml") -> PolicyEngine | JevPolicyEngine:
+    """Build the policy backend selected by ``POLICY_BACKEND``."""
+    if os.environ.get("POLICY_BACKEND", "magi").strip().lower() == "jev":
+        return JevPolicyEngine()
+    return PolicyEngine(policy_path)
 
 
 class PolicyEngine:
