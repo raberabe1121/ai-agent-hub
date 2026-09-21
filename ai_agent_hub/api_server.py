@@ -162,6 +162,26 @@ def _magi_payload(result: Any) -> dict[str, Any] | None:
     return None
 
 
+def _merge_cli_text_payload(payload: dict[str, Any], intent: str, text: str | None) -> None:
+    """Merge the documented JSON ``--text`` form for CLI intents into payload.
+
+    The CLI and SDK expose CLI skill arguments as a JSON string.  Keep that
+    string in ``text`` for policy/audit context, while making its fields
+    available to the worker.  Explicit fields in ``payload`` take precedence.
+    """
+    if intent not in {"cli-skill", "cli-pipeline"} or not isinstance(text, str):
+        return
+    try:
+        structured = json.loads(text)
+    except json.JSONDecodeError:
+        return
+    if not isinstance(structured, dict):
+        return
+    for key, value in structured.items():
+        if key != "intent":
+            payload.setdefault(key, value)
+
+
 @app.post("/envelopes")
 def create_envelope(request: EnvelopeRequest) -> dict[str, Any]:
     print("=== INCOMING REQUEST ===")
@@ -183,6 +203,7 @@ def create_envelope(request: EnvelopeRequest) -> dict[str, Any]:
         payload["approver"] = request.approver
     if request.callback_payload is not None:
         payload["callback_payload"] = request.callback_payload
+    _merge_cli_text_payload(payload, request.intent, request.text)
     if request.intent == "request-approval" and isinstance(request.text, str):
         try:
             text_payload = json.loads(request.text)

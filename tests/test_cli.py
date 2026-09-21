@@ -63,6 +63,29 @@ def test_hub_send_ping_prints_envelope_id(monkeypatch):
     assert "Envelope送信: env-123" in result.output
 
 
+def test_hub_send_pending_approval_does_not_poll_for_a_reply(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def fake_api_call(method, url, **kwargs):
+        calls.append((method, url))
+        if method == "POST":
+            return {
+                "envelope_id": "env-approval",
+                "status": "pending_approval",
+                "reason": "CLI操作は人間の承認が必要",
+            }
+        raise AssertionError("approval-gated envelopes must not be polled")
+
+    monkeypatch.setattr(cli, "_api_call", fake_api_call)
+
+    result = runner.invoke(cli.main, ["send", "--intent", "cli-skill", "--text", '{"skill":"echo","args":["ok"]}'])
+
+    assert result.exit_code == 0
+    assert calls == [("POST", "http://localhost:8080/envelopes")]
+    assert "承認待ち" in result.output
+    assert "hub pending" in result.output
+
+
 def test_hub_pending_lists_items(monkeypatch):
     def fake_api_call(method, url, **kwargs):
         assert method == "GET"

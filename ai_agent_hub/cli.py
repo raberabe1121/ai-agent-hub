@@ -216,6 +216,18 @@ def send(intent: str, text: str | None, model: str, wait_seconds: int, no_wait: 
     envelope_id = created.get("envelope_id", "")
 
     click.echo(f"→ Envelope送信: {envelope_id}")
+    # An approval-gated request deliberately has no reply for the original
+    # envelope.  Do not poll it and present the API's explicit state instead.
+    if created.get("status") == "pending_approval":
+        click.echo("← 承認待ち:")
+        reason = created.get("reason")
+        if isinstance(reason, str) and reason:
+            click.echo(f"   {reason}")
+        click.echo(
+            "   承認IDは `hub pending` で確認し、"
+            "`hub approve <approval-id>` で承認できます。"
+        )
+        return
     if no_wait:
         return
 

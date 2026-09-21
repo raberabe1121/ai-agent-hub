@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import ai_agent_hub.api_server as api_server
 from ai_agent_hub.api_server import app
+from ai_agent_hub.policy import PolicyEngine
 
 
 client = TestClient(app)
@@ -14,7 +15,9 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def disable_policy(monkeypatch):
-    monkeypatch.setattr("ai_agent_hub.api_server._policy_engine.rules", [])
+    engine = PolicyEngine()
+    engine.rules = []
+    monkeypatch.setattr("ai_agent_hub.api_server._policy_engine", engine)
 
 
 def test_post_envelopes_returns_envelope_id(monkeypatch):
@@ -98,6 +101,30 @@ def test_post_envelopes_preserves_payload_fields(monkeypatch):
     assert captured["payload"]["keywords"] == ["cat abuse"]
     assert captured["payload"]["languages"] == ["ja", "en"]
     assert captured["payload"]["sector"] == "TOKYO-SECTOR"
+
+
+def test_post_cli_skill_expands_json_text_into_worker_payload(monkeypatch):
+    captured = {}
+
+    def _capture_env(env):
+        captured["payload"] = env.payload
+
+    monkeypatch.setattr("ai_agent_hub.api_server.save_envelope", _capture_env)
+
+    response = api_server.create_envelope(
+        api_server.EnvelopeRequest(
+            intent="cli-skill",
+            text='{"skill": "echo", "args": ["hello"]}',
+        )
+    )
+
+    assert response["status"] == "queued"
+    assert captured["payload"] == {
+        "intent": "cli-skill",
+        "text": '{"skill": "echo", "args": ["hello"]}',
+        "skill": "echo",
+        "args": ["hello"],
+    }
 
 
 def test_get_health_returns_ok():
